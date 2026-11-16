@@ -23,13 +23,37 @@
    ===================================================================== */
 const MAC_DINH = {
   thuongHieu: "Hixe",
-  hotline: "",
-  xe: [
-    { id: "4", ten: "4 chỗ", moTa: "Sedan / hatchback nhỏ", cho: 4, gia: 700000 },
-    { id: "5", ten: "5 chỗ", moTa: "Sedan / crossover",     cho: 5, gia: 800000 },
-    { id: "7", ten: "7 chỗ", moTa: "SUV / MPV gia đình",    cho: 7, gia: 1000000 },
+  hotline: "0973482520",   // Hotline/Zalo Hixe
+  xe: [   // 24 dòng xe — theo bảng giá Hixe 16/11/2026
+    // — Xe nhỏ & sedan (từ 500k) —
+    { id: "vf3",         ten: "VinFast VF 3",        moTa: "Xe điện · 4 chỗ",  cho: 4, gia: 500000 },
+    { id: "accent",      ten: "Hyundai Accent",      moTa: "Sedan · 5 chỗ",    cho: 5, gia: 650000 },
+    { id: "city-2019",   ten: "Honda City 2019",     moTa: "Sedan · 5 chỗ",    cho: 5, gia: 700000 },
+    { id: "cerato-2019", ten: "Kia Cerato 2019",     moTa: "Sedan · 5 chỗ",    cho: 5, gia: 800000 },
+    { id: "mazda3-2019", ten: "Mazda3 2019",         moTa: "Sedan · 5 chỗ",    cho: 5, gia: 800000 },
+    { id: "k3-2022",     ten: "Kia K3 2022",         moTa: "Sedan · 5 chỗ",    cho: 5, gia: 900000 },
+    { id: "mazda3-2022", ten: "Mazda3 2022",         moTa: "Sedan · 5 chỗ",    cho: 5, gia: 900000 },
+    { id: "lux-a",       ten: "VinFast Lux A",       moTa: "Sedan · 5 chỗ",    cho: 5, gia: 1100000 },
+    { id: "mazda6",      ten: "Mazda6",              moTa: "Sedan · 5 chỗ",    cho: 5, gia: 1100000 },
+    // — SUV & bán tải (từ 800k) —
+    { id: "ranger-xls",      ten: "Ford Ranger XLS",      moTa: "Bán tải · 5 chỗ", cho: 5, gia: 800000 },
+    { id: "mg-zs",           ten: "MG ZS",                moTa: "SUV · 5 chỗ",     cho: 5, gia: 900000 },
+    { id: "seltos-2023",     ten: "Kia Seltos 2023",      moTa: "SUV · 5 chỗ",     cho: 5, gia: 1000000 },
+    { id: "ranger-xls-2023", ten: "Ford Ranger XLS 2023", moTa: "Bán tải · 5 chỗ", cho: 5, gia: 1000000 },
+    { id: "peugeot-2008",    ten: "Peugeot 2008",         moTa: "SUV · 5 chỗ",     cho: 5, gia: 1100000 },
+    { id: "cx-5",            ten: "Mazda CX-5",           moTa: "SUV · 5 chỗ",     cho: 5, gia: 1100000 },
+    { id: "corolla-cross",   ten: "Toyota Corolla Cross", moTa: "Hybrid · 5 chỗ",  cho: 5, gia: 1100000 },
+    { id: "vf8",             ten: "VinFast VF 8",         moTa: "Xe điện · 5 chỗ", cho: 5, gia: 1200000 },
+    // — Xe 7 chỗ (từ 900k) —
+    { id: "xpander",       ten: "Mitsubishi Xpander",  moTa: "MPV · 7 chỗ", cho: 7, gia: 900000 },
+    { id: "carens-2023",   ten: "Kia Carens 2023",     moTa: "MPV · 7 chỗ", cho: 7, gia: 900000 },
+    { id: "innova-cross",  ten: "Toyota Innova Cross", moTa: "MPV · 7 chỗ", cho: 7, gia: 1100000 },
+    { id: "lux-sa",        ten: "VinFast Lux SA",      moTa: "SUV · 7 chỗ", cho: 7, gia: 1400000 },
+    { id: "santa-fe",      ten: "Hyundai Santa Fe",    moTa: "SUV · 7 chỗ", cho: 7, gia: 1400000 },
+    { id: "everest",       ten: "Ford Everest",        moTa: "SUV · 7 chỗ", cho: 7, gia: 1400000 },
+    { id: "carnival-2022", ten: "Kia Carnival 2022",   moTa: "MPV · 7 chỗ", cho: 7, gia: 2100000 },
   ],
-  phiGiaoXe: 150000,   // phí giao xe tận nơi mặc định
+  phiGiaoXe: 150000,   // giao xe nội thành. Trên 10 km hoặc sân bay: 250000 — sửa ở ô "Phí giao xe" từng báo giá
   cuoiTuan: 10,        // % cộng cho mỗi ngày thuê rơi vào Thứ Bảy / Chủ Nhật
   leTet: 20,           // % cộng cho mỗi ngày thuê rơi vào ngày lễ, Tết (không cộng chồng với cuối tuần)
   gioLeNguong: 4,      // giờ lẻ > 4 tiếng → tính thêm 1 ngày
@@ -47,8 +71,16 @@ const MAC_DINH = {
   ],
   leRieng: [           // đợt lễ theo âm lịch: nhập ngày cụ thể từng năm
     { ten: "Tết Âm lịch 2027", tu: "2027-02-04", den: "2027-02-10" },
+    { ten: "Tết Âm lịch 2028", tu: "2028-01-24", den: "2028-01-30" },
+    { ten: "Tết Âm lịch 2029", tu: "2029-02-11", den: "2029-02-17" },
+    { ten: "Tết Âm lịch 2030", tu: "2030-01-31", den: "2030-02-06" },
+    { ten: "Giỗ Tổ Hùng Vương 2026", tu: "2026-04-26", den: "2026-04-26" },
+    { ten: "Giỗ Tổ Hùng Vương 2027", tu: "2027-04-16", den: "2027-04-16" },
+    { ten: "Giỗ Tổ Hùng Vương 2028", tu: "2028-04-04", den: "2028-04-04" },
+    { ten: "Giỗ Tổ Hùng Vương 2029", tu: "2029-04-23", den: "2029-04-23" },
+    { ten: "Giỗ Tổ Hùng Vương 2030", tu: "2030-04-12", den: "2030-04-12" },
   ],
-  ghiChu: "Báo giá chưa gồm xăng, phí cầu đường, gửi xe.",
+  ghiChu: "Giá thuê 1 ngày, giới hạn 250 km/ngày. Chưa gồm xăng, phí cầu đường, gửi xe.",
   nganHang: "",        // thông tin chuyển khoản đặt cọc, in vào tin nhắn khi có cọc
 };
 </script>
@@ -399,7 +431,7 @@ const MAC_DINH = {
       <div class="opt">
         <input type="checkbox" id="delivery">
         <label for="delivery">Giao xe tận nơi</label>
-        <p class="sub">Giao và nhận xe tại địa chỉ khách.</p>
+        <p class="sub">Giao và nhận xe tại địa chỉ khách. Nội thành 150k; trên 10 km hoặc sân bay 250k/lượt.</p>
         <div class="more two" id="deliveryMore" hidden>
           <div class="field"><label for="deliveryAmount">Phí giao xe (đ)</label><input type="text" id="deliveryAmount" class="money-in" inputmode="numeric" autocomplete="off"></div>
           <div class="field"><label for="diaChi">Địa chỉ giao xe</label><input type="text" id="diaChi" autocomplete="off" placeholder="VD: 12 Lê Lợi, Q.1"></div>
@@ -913,7 +945,12 @@ const MAC_DINH = {
   function buildMessage(r, inp) {
     const c = cfg, L = [], kieu = inp.kieuTin, khachGoi = goiKhach(inp);
     const xeTxt = `${r.xe.ten}${inp.dongXe ? ` – ${inp.dongXe}` : r.xe.moTa ? ` (${r.xe.moTa})` : ""}${r.soXe > 1 ? ` × ${r.soXe} xe` : ""}`;
-    const khacXe = inp.kemSoSanh ? soSanhXe(inp).filter((o) => o.xe.id !== r.xe.id) : [];
+    // Chỉ so sánh trong CÙNG nhóm số chỗ và lấy 4 xe gần giá nhất — 24 dòng xe mà gửi hết thì tin nhắn dài 23 dòng
+    const khacXe = inp.kemSoSanh
+      ? soSanhXe(inp).filter((o) => o.xe.id !== r.xe.id && o.xe.cho === r.xe.cho)
+          .sort((a, b) => Math.abs(a.r.tong - r.tong) - Math.abs(b.r.tong - r.tong)).slice(0, 4)
+          .sort((a, b) => a.r.tong - b.r.tong)
+      : [];
     const hl = hieuLucDen();
 
     if (kieu === "ngan") {
