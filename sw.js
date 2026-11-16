@@ -1,5 +1,6 @@
 /* Service worker – Báo giá Hixe
-   Đổi số phiên bản khi sửa file để máy nhân viên nhận bản mới. */
+   Trang chính lấy từ mạng trước nên máy đã cài tự nhận bản mới, không cần đổi số phiên bản.
+   Chỉ đổi số khi muốn xoá sạch bản lưu cũ trên mọi máy. */
 const CACHE = "hixe-bao-gia-pro-v2";
 const CORE = [
   "./",

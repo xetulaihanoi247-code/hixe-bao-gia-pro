@@ -16,7 +16,7 @@ Sau lần mở đầu tiên, app chạy được khi mất mạng.
 
 ## Cập nhật
 
-Mỗi khi sửa `index.html`, tăng số phiên bản `CACHE` trong `sw.js` để máy đã cài nhận bản mới.
+Sửa file rồi `git push` là đủ. Khi có mạng, app luôn tải `index.html` mới nhất; icon và manifest tự cập nhật ngầm và có hiệu lực ở lần mở sau. Không cần đổi số phiên bản `CACHE` trong `sw.js`; chỉ đổi khi muốn xoá sạch bản lưu cũ trên mọi máy.
 
 ## File
 
