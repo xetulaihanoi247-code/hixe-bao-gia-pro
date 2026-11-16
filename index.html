@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#23313B">
+<title>Báo giá thuê xe tự lái Pro · Hixe</title>
+<meta name="description" content="Công cụ nội bộ Hixe: tính báo giá thuê xe tự lái, lưu lịch sử, xuất ảnh và copy tin nhắn gửi khách qua Zalo.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Báo giá Pro">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<script>
+/* =====================================================================
+   CẤU HÌNH MẶC ĐỊNH — mọi mục đều sửa được trong nút "Cài đặt" trên trang.
+   Chỉ cần sửa ở đây nếu muốn đổi giá trị gốc cho mọi máy.
+   ===================================================================== */
+const MAC_DINH = {
+  thuongHieu: "Hixe",
+  hotline: "",
+  xe: [
+    { id: "4", ten: "4 chỗ", moTa: "Sedan / hatchback nhỏ", cho: 4, gia: 700000 },
+    { id: "5", ten: "5 chỗ", moTa: "Sedan / crossover",     cho: 5, gia: 800000 },
+    { id: "7", ten: "7 chỗ", moTa: "SUV / MPV gia đình",    cho: 7, gia: 1000000 },
+  ],
+  phiGiaoXe: 150000,   // phí giao xe tận nơi mặc định
+  cuoiTuan: 10,        // % cộng cho mỗi ngày thuê rơi vào Thứ Bảy / Chủ Nhật
+  leTet: 20,           // % cộng cho mỗi ngày thuê rơi vào ngày lễ, Tết (không cộng chồng với cuối tuần)
+  gioLeNguong: 4,      // giờ lẻ > 4 tiếng → tính thêm 1 ngày
+  gioLePct: 0,         // giờ lẻ ≤ ngưỡng: % giá ngày cho mỗi giờ (0 = miễn phí)
+  giamDai: [           // ưu đãi thuê dài ngày: từ N ngày giảm X% tiền thuê
+    { tu: 3, pct: 5 }, { tu: 7, pct: 10 }, { tu: 30, pct: 20 },
+  ],
+  vat: 8,              // % VAT khi khách cần hoá đơn
+  coc: 30,             // % đặt cọc giữ xe
+  hieuLucGio: 24,      // báo giá có hiệu lực trong bao nhiêu giờ
+  leHangNam: [         // ngày lễ dương lịch cố định (tháng-ngày), tự áp dụng mọi năm
+    { ten: "Tết Dương lịch", tu: "01-01", den: "01-01" },
+    { ten: "30/4 – 1/5",     tu: "04-30", den: "05-01" },
+    { ten: "Quốc khánh",     tu: "09-02", den: "09-02" },
+  ],
+  leRieng: [           // đợt lễ theo âm lịch: nhập ngày cụ thể từng năm
+    { ten: "Tết Âm lịch 2027", tu: "2027-02-04", den: "2027-02-10" },
+  ],
+  ghiChu: "Báo giá chưa gồm xăng, phí cầu đường, gửi xe.",
+  nganHang: "",        // thông tin chuyển khoản đặt cọc, in vào tin nhắn khi có cọc
+};
+</script>
+<style>
+  :root {
+    --asphalt: #23313B; --asphalt-2: #354651; --plate: #F5C400;
+    --paper: #EEF1F0; --card: #FFFFFF; --ink: #17222A; --muted: #56646C;
+    --line: #D3DADD; --focus: #1B6FD1; --danger: #B3261E; --ok: #17714A;
+    --wk: #FFF3BF; --hol: #FFD9D2;
+    --font: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-num: "Barlow Condensed", "Be Vietnam Pro", system-ui, sans-serif;
+    --r-sm: 6px; --r-md: 10px; --r-lg: 16px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; font-family: var(--font); font-size: 16px; line-height: 1.5; color: var(--ink); background: var(--paper); -webkit-font-smoothing: antialiased; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; touch-action: manipulation; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* ---------- Header ---------- */
+  .road { background: var(--asphalt); color: #fff; padding: 18px 20px 26px; padding-top: max(18px, env(safe-area-inset-top)); position: relative; }
+  .road::after { content: ""; position: absolute; left: 0; right: 0; bottom: 10px; height: 4px; background: repeating-linear-gradient(90deg, var(--plate) 0 28px, transparent 28px 52px); opacity: .9; }
+  .road-inner { max-width: 1120px; margin: 0 auto; display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+  .brand { font-family: var(--font-num); font-weight: 700; font-size: 30px; letter-spacing: .5px; line-height: 1; background: var(--plate); color: var(--ink); padding: 4px 10px 2px; border-radius: 4px; border: 2px solid var(--ink); box-shadow: 0 0 0 2px var(--plate); }
+  .road h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+  .road .sub { margin: 0; color: #C3CDD2; font-size: 14px; width: 100%; }
+  .nav { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .nav button { min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1.5px solid #5B6C77; background: transparent; color: #fff; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .nav button:hover { border-color: var(--plate); color: var(--plate); }
+  .nav .count { background: var(--plate); color: var(--ink); border-radius: 999px; padding: 0 7px; font-size: 12px; line-height: 18px; }
+
+  /* ---------- Layout ---------- */
+  main { max-width: 1120px; margin: 0 auto; padding: 20px 16px 120px; display: grid; gap: 20px; }
+  @media (min-width: 940px) {
+    main { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; padding-bottom: 48px; }
+    .quote { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+  }
+  .form { display: grid; gap: 14px; }
+  fieldset { margin: 0; border: 0; padding: 18px 16px; background: var(--card); border-radius: var(--r-lg); min-width: 0; }
+  legend { float: left; width: 100%; padding: 0; margin: 0 0 12px; font-weight: 700; font-size: 17px; }
+  legend + * { clear: both; }
+  legend small { font-weight: 400; font-size: 13px; color: var(--muted); margin-left: 6px; }
+
+  .grid2 { display: grid; gap: 14px; clear: both; }
+  @media (min-width: 560px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+  .field label, .lbl { display: block; font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+  .field input, .field select, .field textarea {
+    width: 100%; min-height: 48px; padding: 10px 12px; border: 2px solid var(--line); border-radius: var(--r-sm);
+    background: #fff; font-size: 16px; font-variant-numeric: tabular-nums;
+  }
+  .field textarea { min-height: 76px; resize: vertical; line-height: 1.45; }
+  .field input:hover, .field select:hover, .field textarea:hover { border-color: #AEB9BE; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--ink); outline: none; }
+  .field input:focus-visible, .field textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+  .field .hint { margin: 6px 0 0; font-size: 14px; color: var(--muted); min-height: 21px; }
+  .field.invalid input { border-color: var(--danger); }
+  .field .error { margin: 6px 0 0; font-size: 14px; color: var(--danger); font-weight: 600; }
+  .mt { margin-top: 14px; }
+
+  /* segmented control */
+  .seg { display: inline-flex; border: 2px solid var(--line); border-radius: var(--r-sm); overflow: hidden; background: #fff; max-width: 100%; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label { min-height: 44px; padding: 9px 14px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; border-left: 1px solid var(--line); margin: 0; white-space: nowrap; }
+  .seg label:first-of-type { border-left: 0; }
+  .seg input:checked + label { background: var(--ink); color: #fff; }
+  .seg input:focus-visible + label { outline: 3px solid var(--focus); outline-offset: -3px; }
+
+  /* ---------- Cars ---------- */
+  .cars { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 10px; clear: both; }
+  .car input { position: absolute; opacity: 0; pointer-events: none; }
+  .car label { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 12px 6px; border: 2px solid var(--line); border-radius: var(--r-md); cursor: pointer; transition: border-color .15s, background-color .15s; height: 100%; }
+  .car svg { width: 46px; height: 72px; display: block; }
+  .car svg .body { fill: #fff; stroke: var(--muted); stroke-width: 2; }
+  .car svg .seat { fill: var(--line); }
+  .car .name { font-weight: 700; font-size: 17px; line-height: 1.2; }
+  .car .price { font-family: var(--font-num); font-weight: 600; font-size: 18px; color: var(--muted); line-height: 1; }
+  .car .price small { font-family: var(--font); font-size: 12px; font-weight: 500; }
+  .car input:checked + label { border-color: var(--ink); background: #FFF8D6; }
+  .car input:checked + label svg .body { stroke: var(--ink); }
+  .car input:checked + label svg .seat { fill: var(--ink); }
+  .car input:checked + label .price { color: var(--ink); }
+  .car input:focus-visible + label { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .car-desc { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+  .car-extra { display: grid; grid-template-columns: 1fr 110px; gap: 14px; margin-top: 14px; align-items: start; }
+  #giaNgay { font-weight: 700; font-size: 18px; }
+  #giaHint .link-btn { font-size: 14px; padding: 0; min-height: 0; margin-left: 4px; }
+
+  fieldset.has-edit { position: relative; }
+  .edit-btn { position: absolute; top: 10px; right: 10px; min-height: 40px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--line); background: #fff; border-radius: 999px; font-size: 14px; font-weight: 600; }
+  .edit-btn:hover { border-color: var(--ink); }
+  .edit-btn svg { width: 16px; height: 16px; }
+  .car-desc .custom { color: var(--ink); font-weight: 600; }
+  .price-row { display: grid; grid-template-columns: 1fr minmax(0, 200px); gap: 2px 12px; align-items: center; padding: 10px 0; }
+  .price-row + .price-row { border-top: 1px solid var(--line); }
+  .price-row label { font-weight: 700; font-size: 16px; line-height: 1.3; }
+  .price-row label span { display: block; font-weight: 400; font-size: 13px; color: var(--muted); }
+  .money { position: relative; }
+  .money input { width: 100%; min-height: 48px; padding: 10px 64px 10px 12px; border: 2px solid var(--line); border-radius: var(--r-sm); background: #fff; font-size: 17px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .money input:focus { border-color: var(--ink); outline: none; }
+  .money input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+  .money input[aria-invalid="true"] { border-color: var(--danger); }
+  .money .unit { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--muted); pointer-events: none; }
+  .price-row .was { grid-column: 2; margin: 2px 0 0; font-size: 12.5px; color: var(--muted); text-align: right; }
+  #priceDlg { width: min(460px, calc(100% - 24px)); }
+
+  /* ---------- Time ---------- */
+  .quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+  .quick span { font-size: 14px; color: var(--muted); margin-right: 2px; }
+  .chip { min-height: 40px; padding: 6px 14px; border: 1.5px solid var(--line); background: #fff; border-radius: 999px; font-size: 14px; font-weight: 600; }
+  .chip:hover { border-color: var(--ink); }
+  .chip:active { background: var(--paper); }
+  .duration { margin-top: 14px; padding: 12px 14px; background: var(--paper); border-radius: var(--r-sm); font-size: 15px; }
+  .days { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .day { font-size: 12.5px; line-height: 1.25; padding: 5px 8px; border-radius: var(--r-sm); background: var(--paper); text-align: center; font-variant-numeric: tabular-nums; }
+  .day b { display: block; font-size: 13px; }
+  .day.wk { background: var(--wk); }
+  .day.le { background: var(--hol); }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* ---------- Options ---------- */
+  .opt { display: grid; grid-template-columns: 24px 1fr; gap: 4px 12px; align-items: start; padding: 12px 0; }
+  .opt + .opt { border-top: 1px solid var(--line); }
+  .opt input[type="checkbox"] { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--ink); cursor: pointer; }
+  .opt > label { font-weight: 600; cursor: pointer; }
+  .opt .sub { grid-column: 2; font-size: 14px; color: var(--muted); margin: 0; }
+  .opt .more { grid-column: 2; margin-top: 8px; display: grid; gap: 10px; }
+  @media (min-width: 560px) { .opt .more.two { grid-template-columns: 200px 1fr; } }
+  .opt .more input { min-height: 44px; }
+  .inline { display: flex; gap: 8px; align-items: stretch; }
+  .inline > .field { flex: 1; min-width: 0; }
+  .khac-row { display: grid; grid-template-columns: 1fr 140px 44px; gap: 8px; margin-top: 8px; }
+  .khac-row input { min-height: 44px; padding: 8px 10px; border: 2px solid var(--line); border-radius: var(--r-sm); width: 100%; background: #fff; }
+  .icon-btn { min-width: 44px; min-height: 44px; border: 1.5px solid var(--line); background: #fff; border-radius: var(--r-sm); font-size: 18px; line-height: 1; color: var(--muted); }
+  .icon-btn:hover { border-color: var(--danger); color: var(--danger); }
+  .link-btn { background: none; border: 0; padding: 8px 0; color: var(--ink); font-weight: 600; font-size: 15px; text-decoration: underline; text-underline-offset: 3px; min-height: 40px; }
+
+  /* ---------- Quote ---------- */
+  .quote { background: var(--card); border-radius: var(--r-lg); }
+  .quote-head { padding: 18px 18px 6px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  .quote-head h2 { margin: 0; font-size: 17px; font-weight: 700; }
+  .code { font-family: var(--font-num); font-weight: 600; font-size: 16px; letter-spacing: .04em; color: var(--muted); margin-left: auto; }
+  .quote-head p { margin: 0; font-size: 14px; color: var(--muted); width: 100%; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  td { padding: 10px 18px; vertical-align: top; border-bottom: 1px dashed var(--line); }
+  td:last-child { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+  td .d { display: block; font-size: 13px; color: var(--muted); font-weight: 400; }
+  tr.free td:last-child { color: var(--muted); font-weight: 500; }
+  tr.minus td:last-child { color: var(--ok); }
+  .total { padding: 18px 18px 12px; display: grid; gap: 10px; }
+  .total-label { font-size: 14px; color: var(--muted); font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .plate { background: var(--plate); border: 3px solid var(--ink); border-radius: 8px; box-shadow: inset 0 0 0 3px var(--plate), inset 0 0 0 4.5px var(--ink); padding: 10px 14px 6px; font-family: var(--font-num); font-weight: 700; font-size: clamp(40px, 11vw, 56px); line-height: 1; letter-spacing: .02em; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .plate .cur { font-size: .55em; margin-left: .12em; }
+  .plate.off { background: var(--paper); color: var(--muted); border-color: var(--line); box-shadow: none; }
+  .plate.bump { animation: bump .28s ease-out; }
+  @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.025); } 100% { transform: scale(1); } }
+  .pay { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pay div { background: var(--paper); border-radius: var(--r-sm); padding: 8px 10px; font-size: 13px; color: var(--muted); }
+  .pay b { display: block; font-size: 17px; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  .compare { padding: 0 18px 12px; }
+  .compare .lbl { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  .cmp-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cmp { border: 1.5px solid var(--line); background: #fff; border-radius: var(--r-sm); padding: 6px 10px; font-size: 13px; text-align: left; min-height: 44px; }
+  .cmp b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .cmp:hover { border-color: var(--ink); }
+  .cmp.cur { border-color: var(--ink); background: #FFF8D6; }
+  .cmp .diff { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+  .msg-box { border-top: 1px solid var(--line); padding: 14px 18px 4px; display: grid; gap: 10px; }
+  .msg-top { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
+  .msg-top .lbl { margin: 0; }
+  .seg.sm label { min-height: 36px; padding: 5px 11px; font-size: 14px; }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+  .check input { width: 18px; height: 18px; accent-color: var(--ink); }
+  #msg { width: 100%; min-height: 220px; padding: 12px 14px; border: 2px solid var(--line); border-radius: var(--r-sm); background: var(--paper); font-size: 14px; line-height: 1.55; resize: vertical; }
+  #msg:focus { border-color: var(--ink); outline: none; background: #fff; }
+  .edited { font-size: 13px; color: var(--danger); font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .edited button { font-size: 13px; padding: 0; min-height: 0; }
+
+  .actions { padding: 10px 18px 18px; display: grid; gap: 10px; }
+  .btn-copy { min-height: 54px; width: 100%; border: 0; border-radius: var(--r-md); background: var(--asphalt); color: #fff; font-weight: 700; font-size: 17px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; transition: background-color .15s; }
+  .btn-copy:hover { background: var(--asphalt-2); }
+  .btn-copy:disabled, .btn-row button:disabled { background: #E3E8EA; color: #8A979D; border-color: #E3E8EA; cursor: not-allowed; }
+  .btn-copy.done { background: var(--ok); }
+  .btn-copy svg { width: 20px; height: 20px; }
+  .btn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .btn-row button { min-height: 46px; border: 1.5px solid var(--line); background: #fff; border-radius: var(--r-md); font-weight: 600; font-size: 14px; padding: 6px 4px; }
+  .btn-row button:hover:not(:disabled) { border-color: var(--ink); }
+  .empty { padding: 18px; color: var(--muted); font-size: 15px; margin: 0; }
+  .print-only { display: none; }
+
+  /* ---------- Mobile bar / toast ---------- */
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--asphalt); color: #fff; padding: 10px 16px; padding-bottom: max(10px, env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 10; transition: transform .2s ease; }
+  .bar.hide { transform: translateY(110%); }
+  .bar .t { font-size: 13px; color: #C3CDD2; line-height: 1.2; }
+  .bar .v { font-family: var(--font-num); font-weight: 700; font-size: 26px; line-height: 1.1; color: var(--plate); font-variant-numeric: tabular-nums; }
+  .bar button { min-height: 44px; padding: 8px 16px; border-radius: var(--r-md); border: 0; background: var(--plate); color: var(--ink); font-weight: 700; font-size: 15px; }
+  @media (min-width: 940px) { .bar { display: none; } }
+  .toast { position: fixed; left: 50%; top: 16px; transform: translate(-50%, -150%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: var(--r-md); font-weight: 600; font-size: 15px; z-index: 100; transition: transform .2s ease; max-width: calc(100% - 32px); }
+  .toast.show { transform: translate(-50%, 0); }
+
+  /* ---------- Dialogs ---------- */
+  dialog { border: 0; padding: 0; width: min(620px, calc(100% - 24px)); max-height: calc(100dvh - 24px); border-radius: var(--r-lg); color: var(--ink); background: var(--card); }
+  dialog::backdrop { background: rgba(23, 34, 42, .55); }
+  .dlg { padding: 20px 18px 18px; }
+  .dlg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  dialog h2 { margin: 0; font-size: 19px; font-weight: 700; }
+  dialog h3 { margin: 22px 0 4px; font-size: 16px; font-weight: 700; }
+  .dlg-sub { margin: 4px 0 12px; font-size: 14px; color: var(--muted); }
+  .dlg-actions { display: flex; gap: 8px; align-items: center; margin-top: 18px; flex-wrap: wrap; position: sticky; bottom: 0; background: var(--card); padding: 12px 0 0; border-top: 1px solid var(--line); }
+  .dlg-actions .spacer { flex: 1; }
+  .btn-ghost, .btn-primary { min-height: 46px; padding: 8px 16px; border-radius: var(--r-md); font-weight: 700; font-size: 15px; }
+  .btn-ghost { background: #fff; border: 1.5px solid var(--line); }
+  .btn-ghost:hover { border-color: var(--ink); }
+  .btn-primary { background: var(--asphalt); color: #fff; border: 0; }
+  .btn-primary:hover { background: var(--asphalt-2); }
+  .x { min-width: 40px; min-height: 40px; border: 0; background: var(--paper); border-radius: 999px; font-size: 20px; line-height: 1; }
+  .srow { display: grid; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .srow input { min-height: 44px; padding: 8px 10px; border: 2px solid var(--line); border-radius: var(--r-sm); width: 100%; background: #fff; font-variant-numeric: tabular-nums; }
+  .srow input:focus { border-color: var(--ink); outline: none; }
+  .srow input[aria-invalid="true"] { border-color: var(--danger); }
+  .srow.xe { grid-template-columns: 1fr 1.3fr 62px 120px 44px; }
+  .srow.bac { grid-template-columns: auto 80px auto 80px auto 44px; font-size: 14px; }
+  .srow.le { grid-template-columns: 1.2fr 1fr 1fr 44px; }
+  .shead { font-size: 12.5px; color: var(--muted); font-weight: 600; border-bottom: 0; padding-bottom: 0; }
+  @media (max-width: 559px) {
+    .srow.xe { grid-template-columns: 1fr 1fr 44px; }
+    .srow.xe .w2 { grid-column: 1 / 3; grid-row: 2; }
+    .srow.xe.shead { display: none; }
+    .srow.le { grid-template-columns: 1fr 1fr 44px; }
+    .srow.le .w2 { grid-column: 1 / 4; }
+    .srow.le.shead { display: none; }
+    dialog { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: var(--r-lg) var(--r-lg) 0 0; }
+    .dlg { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+    .btn-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .err { margin: 8px 0 0; font-size: 14px; color: var(--danger); font-weight: 600; }
+  .note { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+
+  /* history */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+  .stats div { background: var(--paper); border-radius: var(--r-sm); padding: 8px 10px; font-size: 12.5px; color: var(--muted); }
+  .stats b { display: block; font-family: var(--font-num); font-size: 22px; color: var(--ink); line-height: 1.15; }
+  .h-item { border: 1.5px solid var(--line); border-radius: var(--r-md); padding: 10px 12px; margin-top: 8px; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; }
+  .h-item .who { font-weight: 700; }
+  .h-item .meta { font-size: 13px; color: var(--muted); grid-column: 1 / 3; }
+  .h-item .sum { font-family: var(--font-num); font-weight: 700; font-size: 20px; text-align: right; }
+  .h-item .ctl { grid-column: 1 / 3; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+  .h-item select, .h-item button { min-height: 38px; padding: 4px 10px; border: 1.5px solid var(--line); background: #fff; border-radius: var(--r-sm); font-size: 14px; font-weight: 600; }
+  .h-item.chot { border-color: var(--ok); background: #F1F8F4; }
+  .h-item.huy { opacity: .6; }
+  #imgPreview { width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--r-sm); display: block; }
+  .img-wrap { max-height: 55dvh; overflow: auto; margin-top: 10px; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+  /* ---------- Print: chỉ in phiếu báo giá ---------- */
+  @media print {
+    body { background: #fff; }
+    .form, .bar, .toast, .nav, .road .sub, .actions, .msg-box, .compare, dialog { display: none !important; }
+    .road { padding: 12px 0 18px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    main { display: block; padding: 0; max-width: none; }
+    .quote { position: static; max-height: none; overflow: visible; border-radius: 0; }
+    .plate { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 44px; }
+    .print-only { display: block; padding: 6px 18px; font-size: 14px; white-space: pre-line; }
+  }
+</style>
+</head>
+<body>
+
+<header class="road">
+  <div class="road-inner">
+    <span class="brand" id="brand">Hixe</span>
+    <h1>Báo giá thuê xe tự lái</h1>
+    <div class="nav">
+      <button type="button" id="btnInstall" hidden>⤓ Cài app</button>
+      <button type="button" id="btnNew">＋ Báo giá mới</button>
+      <button type="button" id="btnHistory" aria-haspopup="dialog">Lịch sử <span class="count" id="hCount">0</span></button>
+      <button type="button" id="btnSettings" aria-haspopup="dialog">Cài đặt</button>
+    </div>
+    <p class="sub">Nhập thông tin khách, chọn xe và thời gian. Copy tin nhắn hoặc xuất ảnh gửi khách qua Zalo.</p>
+  </div>
+</header>
+
+<main>
+  <form class="form" id="form" novalidate onsubmit="return false">
+    <fieldset>
+      <legend>Khách hàng <small>không bắt buộc</small></legend>
+      <div class="seg" role="radiogroup" aria-label="Xưng hô">
+        <input type="radio" name="xungHo" id="xh0" value="anh/chị" checked><label for="xh0">Anh/chị</label>
+        <input type="radio" name="xungHo" id="xh1" value="anh"><label for="xh1">Anh</label>
+        <input type="radio" name="xungHo" id="xh2" value="chị"><label for="xh2">Chị</label>
+      </div>
+      <div class="grid2 mt">
+        <div class="field"><label for="tenKhach">Tên khách</label><input type="text" id="tenKhach" autocomplete="off" placeholder="VD: Nam"></div>
+        <div class="field"><label for="sdt">Số điện thoại / Zalo</label><input type="tel" id="sdt" inputmode="tel" autocomplete="off" placeholder="VD: 0909 000 000"></div>
+      </div>
+    </fieldset>
+
+    <fieldset class="has-edit">
+      <legend>Loại xe</legend>
+      <button type="button" class="edit-btn" id="editPrices" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        Giá mặc định
+      </button>
+      <div class="cars" id="cars" role="radiogroup" aria-label="Loại xe"></div>
+      <p class="car-desc" id="carDesc"></p>
+      <div class="field mt"><label for="dongXe">Dòng xe cụ thể</label><input type="text" id="dongXe" autocomplete="off" placeholder="VD: Mazda CX-5 2023, số tự động"></div>
+      <div class="car-extra">
+        <div class="field">
+          <label for="giaNgay">Giá thuê / ngày (đ)</label>
+          <input type="text" id="giaNgay" inputmode="numeric" autocomplete="off">
+          <p class="hint" id="giaHint"></p>
+        </div>
+        <div class="field"><label for="soXe">Số xe</label><input type="number" id="soXe" min="1" max="50" step="1" value="1" inputmode="numeric"></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Thời gian thuê</legend>
+      <div class="grid2">
+        <div class="field" id="fPick"><label for="pick">Nhận xe</label><input type="datetime-local" id="pick" step="900" required><p class="hint" id="pickHint"></p></div>
+        <div class="field" id="fRet"><label for="ret">Trả xe</label><input type="datetime-local" id="ret" step="900" required><p class="hint" id="retHint"></p></div>
+      </div>
+      <div class="quick">
+        <span>Trả sau</span>
+        <button type="button" class="chip" data-days="1">1 ngày</button>
+        <button type="button" class="chip" data-days="2">2 ngày</button>
+        <button type="button" class="chip" data-days="3">3 ngày</button>
+        <button type="button" class="chip" data-days="7">1 tuần</button>
+        <button type="button" class="chip" data-days="30">1 tháng</button>
+      </div>
+      <div class="duration" id="duration" aria-live="polite"></div>
+      <div class="days" id="days"></div>
+      <div class="legend" id="daysLegend" hidden>
+        <span><i style="background:var(--paper);border:1px solid var(--line)"></i>Ngày thường</span>
+        <span><i style="background:var(--wk)"></i>Cuối tuần</span>
+        <span><i style="background:var(--hol)"></i>Lễ, Tết</span>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Phụ phí và ưu đãi</legend>
+      <div class="opt">
+        <input type="checkbox" id="delivery">
+        <label for="delivery">Giao xe tận nơi</label>
+        <p class="sub">Giao và nhận xe tại địa chỉ khách.</p>
+        <div class="more two" id="deliveryMore" hidden>
+          <div class="field"><label for="deliveryAmount">Phí giao xe (đ)</label><input type="text" id="deliveryAmount" class="money-in" inputmode="numeric" autocomplete="off"></div>
+          <div class="field"><label for="diaChi">Địa chỉ giao xe</label><input type="text" id="diaChi" autocomplete="off" placeholder="VD: 12 Lê Lợi, Q.1"></div>
+        </div>
+      </div>
+      <div class="opt">
+        <input type="checkbox" id="weekend" checked>
+        <label for="weekend" id="weekendLabel">Phụ phí cuối tuần</label>
+        <p class="sub" id="weekendSub"></p>
+      </div>
+      <div class="opt">
+        <input type="checkbox" id="holiday" checked>
+        <label for="holiday" id="holidayLabel">Phụ phí lễ, Tết</label>
+        <p class="sub" id="holidaySub"></p>
+      </div>
+      <div class="opt">
+        <input type="checkbox" id="longDisc" checked>
+        <label for="longDisc">Ưu đãi thuê dài ngày</label>
+        <p class="sub" id="longSub"></p>
+      </div>
+      <div class="opt">
+        <input type="checkbox" id="extraDisc">
+        <label for="extraDisc">Giảm giá thêm</label>
+        <p class="sub">Khách quen, mã khuyến mãi, thương lượng riêng.</p>
+        <div class="more" id="extraDiscMore" hidden>
+          <div class="inline">
+            <div class="field"><label for="discValue">Mức giảm</label><input type="text" id="discValue" inputmode="numeric" autocomplete="off" placeholder="0"></div>
+            <div>
+              <span class="lbl">Đơn vị</span>
+              <div class="seg" role="radiogroup" aria-label="Đơn vị giảm giá">
+                <input type="radio" name="discKind" id="dk0" value="pct" checked><label for="dk0">%</label>
+                <input type="radio" name="discKind" id="dk1" value="vnd"><label for="dk1">đ</label>
+              </div>
+            </div>
+          </div>
+          <div class="field"><label for="discReason">Lý do (in vào báo giá)</label><input type="text" id="discReason" autocomplete="off" placeholder="VD: khách quen"></div>
+        </div>
+      </div>
+      <div class="opt">
+        <input type="checkbox" id="vat">
+        <label for="vat" id="vatLabel">Xuất hoá đơn VAT</label>
+        <p class="sub">Cộng VAT trên toàn bộ báo giá.</p>
+      </div>
+      <div class="opt">
+        <span></span>
+        <span class="lbl" style="margin:0">Khoản khác</span>
+        <p class="sub">Ghế trẻ em, rửa xe, phí qua đêm… Nhập số âm để trừ tiền.</p>
+        <div style="grid-column:2">
+          <div id="khacList"></div>
+          <button type="button" class="link-btn" id="addKhac">＋ Thêm khoản</button>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Đặt cọc</legend>
+      <div class="opt">
+        <input type="checkbox" id="deposit">
+        <label for="deposit">Yêu cầu đặt cọc giữ xe</label>
+        <p class="sub" id="depositSub"></p>
+        <div class="more" id="depositMore" hidden style="max-width:200px">
+          <div class="field"><label for="depositPct">Tỷ lệ cọc (%)</label><input type="number" id="depositPct" min="1" max="100" step="5" inputmode="numeric"></div>
+        </div>
+      </div>
+    </fieldset>
+  </form>
+
+  <section class="quote" id="quote" aria-labelledby="quoteTitle">
+    <div class="quote-head">
+      <h2 id="quoteTitle">Chi tiết báo giá</h2>
+      <span class="code" id="quoteCode"></span>
+      <p id="quoteSub"></p>
+    </div>
+    <div class="print-only" id="printInfo"></div>
+    <div id="quoteBody"></div>
+    <div class="total">
+      <div class="total-label"><span id="totalLabel">Tổng cộng</span><span id="avgDay"></span></div>
+      <div class="plate" id="plate" aria-labelledby="totalLabel" aria-live="polite">0<span class="cur">đ</span></div>
+      <div class="pay" id="pay" hidden>
+        <div>Đặt cọc giữ xe<b id="payCoc"></b></div>
+        <div>Còn lại khi nhận xe<b id="payConLai"></b></div>
+      </div>
+    </div>
+    <div class="print-only" id="printNote"></div>
+
+    <div class="compare" id="compare" hidden>
+      <div class="lbl">Cùng lịch này, đổi sang loại xe khác</div>
+      <div class="cmp-list" id="cmpList"></div>
+    </div>
+
+    <div class="msg-box">
+      <div class="msg-top">
+        <label class="lbl" for="msg">Tin nhắn gửi khách</label>
+        <div class="seg sm" role="radiogroup" aria-label="Kiểu tin nhắn">
+          <input type="radio" name="kieuTin" id="kt0" value="day-du" checked><label for="kt0">Đầy đủ</label>
+          <input type="radio" name="kieuTin" id="kt1" value="ngan"><label for="kt1">Ngắn gọn</label>
+          <input type="radio" name="kieuTin" id="kt2" value="en"><label for="kt2">English</label>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="kemSoSanh"> Gửi kèm giá các loại xe khác để khách so sánh</label>
+      <textarea id="msg" spellcheck="false" aria-describedby="editedNote"></textarea>
+      <div class="edited" id="editedNote" hidden>Tin đã sửa tay, số liệu sẽ không tự cập nhật. <button type="button" class="link-btn" id="resetMsg">Tạo lại tin tự động</button></div>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="btn-copy" id="copyBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+        <span>Copy báo giá</span>
+      </button>
+      <div class="btn-row">
+        <button type="button" id="zaloBtn" title="Copy tin rồi mở khung chat Zalo theo số điện thoại khách">Mở Zalo</button>
+        <button type="button" id="imgBtn">Xuất ảnh</button>
+        <button type="button" id="printBtn">In / PDF</button>
+        <button type="button" id="saveBtn">Lưu</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="bar" id="bar">
+  <div><div class="t">Tổng cộng</div><div class="v" id="barTotal">0 đ</div></div>
+  <button type="button" id="barCopy">Copy báo giá</button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- Sửa giá xe -->
+<dialog id="priceDlg" aria-labelledby="priceTitle">
+  <form class="dlg" id="priceForm" novalidate>
+    <div class="dlg-head"><h2 id="priceTitle">Sửa giá mặc định theo ngày</h2><button type="button" class="x" data-close aria-label="Đóng">×</button></div>
+    <p class="dlg-sub">Giá tự điền vào ô “Giá thuê / ngày” khi chọn loại xe. Lưu trên máy này.</p>
+    <div id="priceFields"></div>
+    <p class="err" id="priceErr" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn-ghost" id="priceReset">Về giá gốc</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn-ghost" data-close>Hủy</button>
+      <button type="submit" class="btn-primary">Lưu giá</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Lịch sử -->
+<dialog id="historyDlg" aria-labelledby="hTitle">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="hTitle">Lịch sử báo giá</h2><button type="button" class="x" data-close aria-label="Đóng">×</button></div>
+    <p class="dlg-sub">Lưu trên máy này. Báo giá tự lưu mỗi khi bấm Copy.</p>
+    <div class="stats" id="hStats"></div>
+    <div class="field"><input type="search" id="hSearch" placeholder="Tìm theo tên, số điện thoại, mã báo giá" aria-label="Tìm báo giá"></div>
+    <div id="hList"></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn-ghost" id="hClear">Xoá toàn bộ</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn-primary" data-close>Đóng</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Ảnh báo giá -->
+<dialog id="imgDlg" aria-labelledby="iTitle">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="iTitle">Ảnh báo giá</h2><button type="button" class="x" data-close aria-label="Đóng">×</button></div>
+    <div class="img-wrap"><img id="imgPreview" alt="Ảnh phiếu báo giá"></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn-ghost" id="imgShare" hidden>Chia sẻ</button>
+      <button type="button" class="btn-ghost" id="imgDownload">Tải về</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn-primary" id="imgCopy">Copy ảnh</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Cài đặt -->
+<dialog id="settingsDlg" aria-labelledby="sTitle">
+  <form class="dlg" id="settingsForm" novalidate>
+    <div class="dlg-head"><h2 id="sTitle">Cài đặt</h2><button type="button" class="x" data-close aria-label="Đóng">×</button></div>
+    <p class="dlg-sub">Lưu trên máy này và dùng cho mọi báo giá sau đó.</p>
+
+    <h3>Bảng giá xe</h3>
+    <div class="srow xe shead"><span>Tên</span><span>Mô tả</span><span>Số chỗ</span><span>Giá / ngày (đ)</span><span></span></div>
+    <div id="sXe"></div>
+    <button type="button" class="link-btn" id="sAddXe">＋ Thêm loại xe</button>
+
+    <h3>Quy tắc tính tiền</h3>
+    <div class="grid2">
+      <div class="field"><label for="sCuoiTuan">Phụ phí cuối tuần (%)</label><input type="number" id="sCuoiTuan" min="0" max="200" step="1"></div>
+      <div class="field"><label for="sLe">Phụ phí lễ, Tết (%)</label><input type="number" id="sLe" min="0" max="300" step="1"></div>
+      <div class="field"><label for="sNguong">Giờ lẻ trên mấy tiếng tính 1 ngày</label><input type="number" id="sNguong" min="0" max="23" step="1"></div>
+      <div class="field"><label for="sGioLePct">Giờ lẻ dưới ngưỡng: % giá ngày mỗi giờ</label><input type="number" id="sGioLePct" min="0" max="100" step="1"></div>
+      <div class="field"><label for="sPhiGiao">Phí giao xe mặc định (đ)</label><input type="text" id="sPhiGiao" class="money-in" inputmode="numeric"></div>
+      <div class="field"><label for="sVat">VAT (%)</label><input type="number" id="sVat" min="0" max="20" step="1"></div>
+      <div class="field"><label for="sCoc">Tỷ lệ cọc mặc định (%)</label><input type="number" id="sCoc" min="1" max="100" step="5"></div>
+      <div class="field"><label for="sHieuLuc">Báo giá có hiệu lực (giờ)</label><input type="number" id="sHieuLuc" min="1" max="720" step="1"></div>
+    </div>
+
+    <h3>Ưu đãi thuê dài ngày</h3>
+    <p class="note">Áp dụng mức cao nhất mà số ngày thuê đạt tới, tính trên tiền thuê xe.</p>
+    <div id="sBac"></div>
+    <button type="button" class="link-btn" id="sAddBac">＋ Thêm mức</button>
+
+    <h3>Ngày lễ, Tết</h3>
+    <p class="note" id="sLeFixed"></p>
+    <div class="srow le shead"><span>Tên đợt lễ</span><span>Từ ngày</span><span>Đến ngày</span><span></span></div>
+    <div id="sLeRieng"></div>
+    <button type="button" class="link-btn" id="sAddLe">＋ Thêm đợt lễ (âm lịch, lễ riêng)</button>
+
+    <h3>Thông tin in vào báo giá</h3>
+    <div class="grid2">
+      <div class="field"><label for="sThuongHieu">Tên thương hiệu</label><input type="text" id="sThuongHieu"></div>
+      <div class="field"><label for="sHotline">Hotline</label><input type="text" id="sHotline" placeholder="Để trống thì không in"></div>
+    </div>
+    <div class="field mt"><label for="sGhiChu">Ghi chú cuối báo giá</label><textarea id="sGhiChu"></textarea></div>
+    <div class="field mt"><label for="sNganHang">Thông tin chuyển khoản đặt cọc</label><textarea id="sNganHang" placeholder="VD: Vietcombank · 0123456789 · NGUYEN VAN A"></textarea></div>
+
+    <h3>Sao lưu</h3>
+    <p class="note">Xuất file cài đặt rồi nhập ở máy khác để mọi nhân viên dùng chung bảng giá.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button type="button" class="btn-ghost" id="sExport">Xuất cài đặt</button>
+      <button type="button" class="btn-ghost" id="sImport">Nhập cài đặt</button>
+      <input type="file" id="sFile" accept="application/json,.json" hidden>
+    </div>
+
+    <p class="err" id="sErr" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn-ghost" id="sReset">Về mặc định</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn-ghost" data-close>Hủy</button>
+      <button type="submit" class="btn-primary">Lưu cài đặt</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const MS_H = 3600000, MS_D = 24 * MS_H;
+  const THU = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
+  const THU_NGAN = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  const DOW_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const vnd = (n) => new Intl.NumberFormat("vi-VN").format(Math.round(n));
+  const vndD = (n) => vnd(n) + "đ";
+  const pad = (n) => String(n).padStart(2, "0");
+  const toLocalInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const parseLocal = (s) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(s || "");
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
+  };
+  const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const fmtDate = (d) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  const fmtDM = (d) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+  const fmtTime = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const fmtLong = (d) => `${THU[d.getDay()]}, ${fmtDate(d)} lúc ${fmtTime(d)}`;
+  const fmtShort = (d) => `${fmtTime(d)} ${THU_NGAN[d.getDay()]} ${fmtDate(d)}`;
+  const fmtEn = (d) => `${fmtTime(d)} ${DOW_EN[d.getDay()]} ${fmtDate(d)}`;
+  const isWeekend = (d) => d.getDay() === 0 || d.getDay() === 6;
+  const digitsOnly = (s) => parseInt(String(s).replace(/\D/g, ""), 10) || 0;
+  const moneyIn = (s) => { const t = String(s).trim(); const n = digitsOnly(t); return /^[-−–]/.test(t) ? -n : n; };
+  const num = (v, md = 0) => { const n = parseFloat(String(v).replace(",", ".")); return Number.isFinite(n) ? n : md; };
+  const giaNgan = (n) => (n % 1000 === 0 ? `${vnd(n / 1000)}k` : vnd(n));
+  const pctTxt = (n) => `${+(+n).toFixed(2)}`.replace(".", ",") + "%";
+
+  function fmtDuration(ms, en) {
+    const totalMin = Math.round(ms / 60000);
+    const d = Math.floor(totalMin / 1440), h = Math.floor((totalMin % 1440) / 60), m = totalMin % 60;
+    const parts = [];
+    if (d) parts.push(en ? `${d} day${d > 1 ? "s" : ""}` : `${d} ngày`);
+    if (h) parts.push(en ? `${h} h` : `${h} giờ`);
+    if (m) parts.push(en ? `${m} min` : `${m} phút`);
+    return parts.join(" ") || (en ? "0 min" : "0 phút");
+  }
+
+  /* ---------- Lưu trữ ---------- */
+  const KHOA = { caiDat: "hixe.baoGiaPro.caiDat.v1", lichSu: "hixe.baoGiaPro.lichSu.v1", dem: "hixe.baoGiaPro.dem.v1" };
+  const kho = {
+    doc(k, md) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? md; } catch (e) { return md; } },
+    ghi(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+    xoa(k) { try { localStorage.removeItem(k); } catch (e) {} },
+  };
+  function chuanCaiDat(raw) {
+    const c = Object.assign(clone(MAC_DINH), raw && typeof raw === "object" ? raw : {});
+    if (!Array.isArray(c.xe) || !c.xe.length) c.xe = clone(MAC_DINH.xe);
+    c.xe = c.xe.filter((x) => x && x.ten && x.gia > 0).map((x, i) => ({ id: String(x.id ?? "x" + i), ten: String(x.ten), moTa: String(x.moTa || ""), cho: Math.max(1, x.cho | 0) || 4, gia: Math.round(+x.gia) }));
+    if (!c.xe.length) c.xe = clone(MAC_DINH.xe);
+    c.giamDai = (Array.isArray(c.giamDai) ? c.giamDai : []).filter((b) => b && b.tu > 0 && b.pct > 0).map((b) => ({ tu: b.tu | 0, pct: +b.pct })).sort((a, b) => a.tu - b.tu);
+    c.leRieng = (Array.isArray(c.leRieng) ? c.leRieng : []).filter((l) => l && /^\d{4}-\d{2}-\d{2}$/.test(l.tu || "")).map((l) => ({ ten: String(l.ten || "Lễ"), tu: l.tu, den: /^\d{4}-\d{2}-\d{2}$/.test(l.den || "") && l.den >= l.tu ? l.den : l.tu }));
+    if (!Array.isArray(c.leHangNam)) c.leHangNam = clone(MAC_DINH.leHangNam);
+    ["cuoiTuan", "leTet", "gioLeNguong", "gioLePct", "vat", "coc", "hieuLucGio", "phiGiaoXe"].forEach((k) => { c[k] = Math.max(0, num(c[k], MAC_DINH[k])); });
+    return c;
+  }
+  let cfg = chuanCaiDat(kho.doc(KHOA.caiDat, null));
+  let lichSu = kho.doc(KHOA.lichSu, []);
+  if (!Array.isArray(lichSu)) lichSu = [];
+
+  /* ---------- Ngày lễ ---------- */
+  function tenNgayLe(d, c) {
+    const full = ymd(d), md = full.slice(5);
+    for (const l of c.leRieng) if (full >= l.tu && full <= l.den) return l.ten;
+    for (const l of c.leHangNam) {
+      const trong = l.tu <= l.den ? md >= l.tu && md <= l.den : md >= l.tu || md <= l.den;
+      if (trong) return l.ten;
+    }
+    return null;
+  }
+
+  /* ---------- Lõi tính tiền (thuần, không đụng DOM) ---------- */
+  function tinhGia(inp, c) {
+    c = c || cfg;
+    const xeGoc = c.xe.find((x) => x.id === inp.loai);
+    if (!xeGoc) return { loi: "Chưa chọn loại xe." };
+    const xe = { ...xeGoc, gia: inp.gia > 0 ? Math.round(inp.gia) : xeGoc.gia, giaMacDinh: xeGoc.gia };   // giá riêng cho báo giá này
+    const nhan = inp.nhan instanceof Date ? inp.nhan : parseLocal(inp.nhan);
+    const tra = inp.tra instanceof Date ? inp.tra : parseLocal(inp.tra);
+    if (!nhan) return { loi: "Chưa chọn ngày giờ nhận xe.", truong: "pick" };
+    if (!tra) return { loi: "Chưa chọn ngày giờ trả xe.", truong: "ret" };
+    const ms = tra - nhan;
+    if (ms <= 0) return { loi: "Giờ trả xe phải sau giờ nhận xe.", truong: "ret" };
+
+    const soXe = Math.min(50, Math.max(1, inp.soXe | 0));
+    const phut = Math.round(ms / 60000);
+    const ngayTron = Math.floor(phut / 1440);
+    const phutLe = phut - ngayTron * 1440;
+    const nguong = c.gioLeNguong * 60;
+
+    let soNgay = ngayTron, gioLe = 0, leThanhNgay = false;
+    if (phutLe > nguong) { soNgay += 1; leThanhNgay = true; }
+    else if (phutLe > 0) { gioLe = Math.ceil(phutLe / 60); }
+    if (soNgay === 0) { soNgay = 1; gioLe = 0; leThanhNgay = phutLe > 0; }   // tối thiểu 1 ngày
+
+    // Mỗi ngày tính tiền bắt đầu tại (giờ nhận + i×24h). Ngày lễ ưu tiên hơn cuối tuần, không cộng chồng.
+    const ngay = [];
+    for (let i = 0; i < soNgay; i++) {
+      const bd = new Date(nhan.getFullYear(), nhan.getMonth(), nhan.getDate() + i, nhan.getHours(), nhan.getMinutes());
+      const le = tenNgayLe(bd, c);
+      ngay.push({ batDau: bd, le, cuoiTuan: !le && isWeekend(bd) });
+    }
+    const soNgayCuoiTuan = ngay.filter((n) => n.cuoiTuan).length;
+    const soNgayLe = ngay.filter((n) => n.le).length;
+    const tenLe = [...new Set(ngay.filter((n) => n.le).map((n) => n.le))];
+
+    const tienThue = soNgay * xe.gia * soXe;
+    const tienGioLe = Math.round(gioLe * xe.gia * c.gioLePct / 100) * soXe;
+    const tienCuoiTuan = inp.cuoiTuan ? Math.round(soNgayCuoiTuan * xe.gia * c.cuoiTuan / 100) * soXe : 0;
+    const tienLe = inp.leTet ? Math.round(soNgayLe * xe.gia * c.leTet / 100) * soXe : 0;
+
+    const bac = [...c.giamDai].reverse().find((b) => soNgay >= b.tu) || null;
+    const bacKe = c.giamDai.find((b) => b.tu > soNgay) || null;
+    const tienGiamDai = inp.giamDai && bac ? Math.round(tienThue * bac.pct / 100) : 0;
+
+    let tienGiamThem = 0;
+    const gt = inp.giamThem;
+    if (gt && gt.bat && gt.giaTri > 0) {
+      const nen = tienThue - tienGiamDai;
+      tienGiamThem = gt.kieu === "vnd" ? Math.min(Math.round(gt.giaTri), nen) : Math.round(nen * Math.min(100, gt.giaTri) / 100);
+    }
+
+    const tienGiaoXe = inp.giaoXe ? Math.max(0, inp.phiGiaoXe | 0) : 0;
+    const khac = (inp.khac || []).filter((k) => k && k.ten && k.tien).map((k) => ({ ten: String(k.ten), tien: Math.round(+k.tien) }));
+    const tienKhac = khac.reduce((s, k) => s + k.tien, 0);
+
+    const truocVat = Math.max(0, tienThue + tienGioLe + tienCuoiTuan + tienLe - tienGiamDai - tienGiamThem + tienGiaoXe + tienKhac);
+    const tienVat = inp.vat ? Math.round(truocVat * c.vat / 100) : 0;
+    const tong = truocVat + tienVat;
+
+    const cocPct = Math.min(100, Math.max(0, num(inp.cocPct, c.coc)));
+    const tienCoc = inp.coc ? Math.min(tong, Math.round(tong * cocPct / 100 / 1000) * 1000) : 0;
+
+    return { xe, soXe, nhan, tra, ms, ngayTron, phutLe, soNgay, gioLe, leThanhNgay, ngay, soNgayCuoiTuan, soNgayLe, tenLe,
+             tienThue, tienGioLe, tienCuoiTuan, tienLe, bac, bacKe, tienGiamDai, tienGiamThem, tienGiaoXe, khac, tienKhac,
+             truocVat, tienVat, tong, cocPct, tienCoc, conLai: tong - tienCoc, cfg: c, inp };
+  }
+  window.tinhGia = tinhGia;      // tiện kiểm thử trong console
+  window.MAC_DINH_CHUAN = () => chuanCaiDat(null);
+
+  /* Các dòng của bảng báo giá — dùng chung cho bảng, tin nhắn, ảnh */
+  function cacDong(r, en) {
+    const c = r.cfg, D = [], nx = r.soXe > 1 ? (en ? ` × ${r.soXe} cars` : ` × ${r.soXe} xe`) : "";
+    const ng = en ? (n) => `${n} day${n > 1 ? "s" : ""}` : (n) => `${n} ngày`;
+    D.push({ n: (en ? `Rental – ${r.xe.ten}` : `Thuê xe ${r.xe.ten}`) + nx, c: `${vndD(r.xe.gia)} × ${ng(r.soNgay)}${nx}`, t: r.tienThue });
+    if (r.tienGioLe > 0) D.push({ n: en ? "Extra hours" : "Giờ lẻ", c: en ? `${r.gioLe} h × ${pctTxt(c.gioLePct)} of daily rate${nx}` : `${r.gioLe} giờ × ${pctTxt(c.gioLePct)} giá ngày${nx}`, t: r.tienGioLe });
+    if (r.soNgayCuoiTuan > 0 && c.cuoiTuan > 0) {
+      const days = r.ngay.filter((n) => n.cuoiTuan).map((n) => `${(en ? DOW_EN : THU_NGAN)[n.batDau.getDay()]} ${fmtDM(n.batDau)}`);
+      const ds = days.length > 6 ? days.slice(0, 6).join(", ") + "…" : days.join(", ");
+      if (r.inp.cuoiTuan) D.push({ n: en ? `Weekend surcharge +${pctTxt(c.cuoiTuan)}` : `Phụ phí cuối tuần +${pctTxt(c.cuoiTuan)}`, c: `${ng(r.soNgayCuoiTuan)} (${ds})`, t: r.tienCuoiTuan });
+      else D.push({ n: en ? "Weekend surcharge" : "Phụ phí cuối tuần", c: en ? `Waived for ${ng(r.soNgayCuoiTuan)}` : `Đã miễn cho ${ng(r.soNgayCuoiTuan)} (${ds})`, t: 0, free: true });
+    }
+    if (r.soNgayLe > 0 && c.leTet > 0) {
+      if (r.inp.leTet) D.push({ n: en ? `Holiday surcharge +${pctTxt(c.leTet)}` : `Phụ phí lễ, Tết +${pctTxt(c.leTet)}`, c: `${ng(r.soNgayLe)} (${r.tenLe.join(", ")})`, t: r.tienLe });
+      else D.push({ n: en ? "Holiday surcharge" : "Phụ phí lễ, Tết", c: en ? `Waived for ${ng(r.soNgayLe)}` : `Đã miễn cho ${ng(r.soNgayLe)} (${r.tenLe.join(", ")})`, t: 0, free: true });
+    }
+    if (r.tienGiamDai > 0) D.push({ n: en ? `Long rental discount −${pctTxt(r.bac.pct)}` : `Ưu đãi thuê dài ngày −${pctTxt(r.bac.pct)}`, c: en ? `From ${ng(r.bac.tu)}` : `Thuê từ ${ng(r.bac.tu)}`, t: -r.tienGiamDai });
+    if (r.tienGiamThem > 0) {
+      const gt = r.inp.giamThem, muc = gt.kieu === "pct" ? ` −${pctTxt(Math.min(100, gt.giaTri))}` : "";
+      D.push({ n: (en ? "Extra discount" : "Giảm giá thêm") + muc, c: gt.lyDo || "", t: -r.tienGiamThem });
+    }
+    if (r.inp.giaoXe) D.push({ n: en ? "Delivery & pickup" : "Giao xe tận nơi", c: r.inp.diaChi || "", t: r.tienGiaoXe });
+    r.khac.forEach((k) => D.push({ n: k.ten, c: "", t: k.tien }));
+    if (r.inp.vat) D.push({ n: `VAT ${pctTxt(c.vat)}`, c: en ? `On ${vndD(r.truocVat)}` : `Trên ${vndD(r.truocVat)}`, t: r.tienVat });
+    return D;
+  }
+  const tienKy = (t) => (t < 0 ? "−" + vndD(-t) : vndD(t));
+
+  /* ---------- Chọn loại xe ---------- */
+  function carSvg(seats) {
+    let rows;
+    if (seats <= 2) rows = [2]; else if (seats <= 4) rows = [2, 2]; else if (seats <= 5) rows = [2, 3];
+    else if (seats <= 7) rows = [2, 3, 2]; else if (seats <= 9) rows = [2, 3, 3]; else rows = [2, 3, 3, 3];
+    const top = rows.length >= 4 ? 14 : 22, rowGap = rows.length >= 4 ? 13 : rows.length === 3 ? 15 : 19;
+    let s = "";
+    rows.forEach((n, r) => {
+      const w = n === 3 ? 8 : 10, gap = n === 3 ? 2.5 : 6, total = n * w + (n - 1) * gap, x0 = 23 - total / 2;
+      for (let i = 0; i < n; i++) s += `<rect class="seat" x="${x0 + i * (w + gap)}" y="${top + r * rowGap}" width="${w}" height="10" rx="2.5"/>`;
+    });
+    return `<svg viewBox="0 0 46 72" aria-hidden="true"><rect class="body" x="5" y="3" width="36" height="66" rx="12"/>${s}</svg>`;
+  }
+  const loaiDangChon = () => (document.querySelector('input[name="loai"]:checked') || {}).value;
+  const giaMacDinh = () => (cfg.xe.find((x) => x.id === loaiDangChon()) || {}).gia || 0;
+  const datGiaMacDinh = () => { $("giaNgay").value = vnd(giaMacDinh()); };
+  function buildCars(chon) {
+    const cur = chon || loaiDangChon();
+    const co = cfg.xe.some((x) => x.id === cur) ? cur : cfg.xe[Math.min(1, cfg.xe.length - 1)].id;
+    $("cars").innerHTML = cfg.xe.map((v, i) =>
+      `<div class="car"><input type="radio" name="loai" id="loai${i}" value="${esc(v.id)}" ${v.id === co ? "checked" : ""}>` +
+      `<label for="loai${i}">${carSvg(v.cho)}<span class="name">${esc(v.ten)}</span></label></div>`).join("");
+  }
+
+  /* ---------- Khoản khác ---------- */
+  let khac = [];
+  function veKhac() {
+    $("khacList").innerHTML = khac.map((k, i) =>
+      `<div class="khac-row"><input type="text" data-k="ten" data-i="${i}" value="${esc(k.ten)}" placeholder="Tên khoản" aria-label="Tên khoản ${i + 1}">` +
+      `<input type="text" data-k="tien" data-i="${i}" value="${k.tien ? (k.tien < 0 ? "-" : "") + vnd(Math.abs(k.tien)) : ""}" placeholder="Số tiền (đ)" inputmode="text" aria-label="Số tiền khoản ${i + 1}">` +
+      `<button type="button" class="icon-btn" data-del="${i}" aria-label="Xoá khoản ${i + 1}">×</button></div>`).join("");
+  }
+  $("addKhac").addEventListener("click", () => { khac.push({ ten: "", tien: 0 }); veKhac(); $("khacList").querySelector(".khac-row:last-child input").focus(); });
+  $("khacList").addEventListener("input", (e) => {
+    const i = e.target.dataset.i; if (i == null) return;
+    if (e.target.dataset.k === "ten") khac[i].ten = e.target.value; else khac[i].tien = moneyIn(e.target.value);
+  });
+  $("khacList").addEventListener("focusout", (e) => {
+    if (e.target.dataset.k === "tien") { const n = moneyIn(e.target.value); e.target.value = n ? (n < 0 ? "-" : "") + vnd(Math.abs(n)) : ""; }
+  });
+  $("khacList").addEventListener("click", (e) => { const d = e.target.dataset.del; if (d != null) { khac.splice(+d, 1); veKhac(); render(); } });
+
+  /* ---------- Đọc / ghi form ---------- */
+  const radio = (name) => (document.querySelector(`input[name="${name}"]:checked`) || {}).value;
+  const datRadio = (name, v) => { const el = [...document.querySelectorAll(`input[name="${name}"]`)].find((x) => x.value === v); if (el) el.checked = true; };
+  function layForm() {
+    return {
+      xungHo: radio("xungHo") || "anh/chị", tenKhach: $("tenKhach").value.trim(), sdt: $("sdt").value.trim(),
+      loai: loaiDangChon(), dongXe: $("dongXe").value.trim(), gia: digitsOnly($("giaNgay").value), soXe: Math.max(1, parseInt($("soXe").value, 10) || 1),
+      nhan: $("pick").value, tra: $("ret").value,
+      giaoXe: $("delivery").checked, phiGiaoXe: digitsOnly($("deliveryAmount").value), diaChi: $("diaChi").value.trim(),
+      cuoiTuan: $("weekend").checked, leTet: $("holiday").checked, giamDai: $("longDisc").checked,
+      giamThem: { bat: $("extraDisc").checked, kieu: radio("discKind") || "pct", giaTri: radio("discKind") === "vnd" ? digitsOnly($("discValue").value) : num($("discValue").value), lyDo: $("discReason").value.trim() },
+      vat: $("vat").checked, khac: clone(khac),
+      coc: $("deposit").checked, cocPct: num($("depositPct").value, cfg.coc),
+      kieuTin: radio("kieuTin") || "day-du", kemSoSanh: $("kemSoSanh").checked,
+    };
+  }
+  function datForm(s) {
+    datRadio("xungHo", s.xungHo); $("tenKhach").value = s.tenKhach || ""; $("sdt").value = s.sdt || "";
+    buildCars(s.loai); $("dongXe").value = s.dongXe || ""; $("soXe").value = s.soXe || 1;
+    $("giaNgay").value = vnd(s.gia > 0 ? s.gia : giaMacDinh());
+    $("pick").value = s.nhan || ""; $("ret").value = s.tra || "";
+    $("delivery").checked = !!s.giaoXe; $("deliveryAmount").value = vnd(s.phiGiaoXe ?? cfg.phiGiaoXe); $("diaChi").value = s.diaChi || "";
+    $("weekend").checked = s.cuoiTuan !== false; $("holiday").checked = s.leTet !== false; $("longDisc").checked = s.giamDai !== false;
+    const gt = s.giamThem || {};
+    $("extraDisc").checked = !!gt.bat; datRadio("discKind", gt.kieu || "pct");
+    $("discValue").value = gt.giaTri ? (gt.kieu === "vnd" ? vnd(gt.giaTri) : String(gt.giaTri)) : ""; $("discReason").value = gt.lyDo || "";
+    $("vat").checked = !!s.vat; khac = clone(s.khac || []); veKhac();
+    $("deposit").checked = !!s.coc; $("depositPct").value = s.cocPct ?? cfg.coc;
+    datRadio("kieuTin", s.kieuTin || "day-du"); $("kemSoSanh").checked = !!s.kemSoSanh;
+    dongBoAnHien();
+  }
+  function dongBoAnHien() {
+    $("deliveryMore").hidden = !$("delivery").checked;
+    $("extraDiscMore").hidden = !$("extraDisc").checked;
+    $("depositMore").hidden = !$("deposit").checked;
+  }
+  function formMoi() {
+    const now = new Date();
+    const pick0 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 8, 0);
+    return { xungHo: "anh/chị", loai: loaiDangChon(), soXe: 1, nhan: toLocalInput(pick0), tra: toLocalInput(new Date(pick0.getTime() + MS_D)),
+             phiGiaoXe: cfg.phiGiaoXe, cocPct: cfg.coc, kieuTin: radio("kieuTin"), kemSoSanh: false };
+  }
+
+  /* ---------- Mã báo giá ---------- */
+  let maHienTai = "";
+  function maMoi() {
+    const d = new Date(), key = `${pad(d.getDate())}${pad(d.getMonth() + 1)}${String(d.getFullYear()).slice(2)}`;
+    const dem = kho.doc(KHOA.dem, {});
+    let n = (dem.ngay === key ? dem.so : 0) + 1;
+    while (lichSu.some((h) => h.ma === `BG-${key}-${pad(n)}`)) n++;
+    return { ma: `BG-${key}-${pad(n)}`, key, n };
+  }
+  function ganMaMoi() { maHienTai = maMoi().ma; }
+  function chotMa() {   // gọi khi lưu: giữ bộ đếm để mã sau không trùng
+    const m = /^BG-(\d{6})-(\d+)$/.exec(maHienTai); if (!m) return;
+    const dem = kho.doc(KHOA.dem, {});
+    if (dem.ngay !== m[1] || (dem.so || 0) < +m[2]) kho.ghi(KHOA.dem, { ngay: m[1], so: +m[2] });
+  }
+
+  /* ---------- Tin nhắn ---------- */
+  const goiKhach = (inp) => (inp.tenKhach ? `${inp.xungHo === "anh/chị" ? "anh/chị" : inp.xungHo} ${inp.tenKhach}` : inp.xungHo);
+  const hieuLucDen = () => new Date(Date.now() + cfg.hieuLucGio * MS_H);
+  function soSanhXe(inp) {
+    return cfg.xe.map((x) => ({ xe: x, r: tinhGia({ ...inp, loai: x.id, gia: x.id === inp.loai ? inp.gia : 0 }) })).filter((o) => !o.r.loi);
+  }
+  function buildMessage(r, inp) {
+    const c = cfg, L = [], kieu = inp.kieuTin, khachGoi = goiKhach(inp);
+    const xeTxt = `${r.xe.ten}${inp.dongXe ? ` – ${inp.dongXe}` : r.xe.moTa ? ` (${r.xe.moTa})` : ""}${r.soXe > 1 ? ` × ${r.soXe} xe` : ""}`;
+    const khacXe = inp.kemSoSanh ? soSanhXe(inp).filter((o) => o.xe.id !== r.xe.id) : [];
+    const hl = hieuLucDen();
+
+    if (kieu === "ngan") {
+      L.push(`${c.thuongHieu} báo giá ${khachGoi}: xe ${xeTxt}, ${fmtShort(r.nhan)} → ${fmtShort(r.tra)} (tính ${r.soNgay} ngày).`);
+      const gom = [];
+      if (r.tienCuoiTuan > 0) gom.push("phụ phí cuối tuần");
+      if (r.tienLe > 0) gom.push("phụ phí lễ");
+      if (r.tienGiaoXe > 0) gom.push("giao xe tận nơi");
+      if (r.tienVat > 0) gom.push("VAT");
+      const giam = r.tienGiamDai + r.tienGiamThem;
+      L.push(`💰 Tổng: ${vndD(r.tong)}${gom.length ? ` (đã gồm ${gom.join(", ")})` : ""}${giam > 0 ? `, đã giảm ${vndD(giam)}` : ""}.`);
+      if (r.tienCoc > 0) L.push(`Cọc giữ xe ${vndD(r.tienCoc)}, còn lại ${vndD(r.conLai)} khi nhận xe.`);
+      if (khacXe.length) L.push(`Xe khác cùng lịch: ${khacXe.map((o) => `${o.xe.ten} ${vndD(o.r.tong)}`).join(" · ")}.`);
+      if (c.hotline) L.push(`Liên hệ: ${c.hotline}`);
+      return L.join("\n");
+    }
+
+    if (kieu === "en") {
+      const who = inp.tenKhach ? `${inp.xungHo === "anh" ? "Mr. " : inp.xungHo === "chị" ? "Ms. " : ""}${inp.tenKhach}` : "Sir/Madam";
+      L.push(`Dear ${who},`);
+      L.push(`${c.thuongHieu} is pleased to send you our self-drive car rental quote (${maHienTai}):`, "");
+      L.push(`🚗 Car: ${r.xe.ten}${inp.dongXe ? ` – ${inp.dongXe}` : ""}${r.soXe > 1 ? ` × ${r.soXe} cars` : ""}`);
+      L.push(`📅 Pick-up: ${fmtEn(r.nhan)}`, `📅 Return: ${fmtEn(r.tra)}`);
+      L.push(`⏱ Duration: ${fmtDuration(r.ms, true)} → charged ${r.soNgay} day${r.soNgay > 1 ? "s" : ""}`);
+      if (inp.giaoXe && inp.diaChi) L.push(`📍 Delivery to: ${inp.diaChi}`);
+      L.push("");
+      cacDong(r, true).filter((d) => !d.free).forEach((d) => L.push(`• ${d.n}${d.c ? ` – ${d.c}` : ""}: ${tienKy(d.t)}`));
+      L.push("", `💰 TOTAL: ${vndD(r.tong)}`);
+      if (r.tienCoc > 0) {
+        L.push(`🔒 Deposit to confirm (${pctTxt(r.cocPct)}): ${vndD(r.tienCoc)} — balance ${vndD(r.conLai)} due at pick-up.`);
+        if (c.nganHang) L.push(`Bank transfer: ${c.nganHang}`);
+      }
+      if (khacXe.length) L.push("", "Other options for the same dates:", ...khacXe.map((o) => `• ${o.xe.ten}: ${vndD(o.r.tong)}`));
+      L.push("", `More than ${c.gioLeNguong} extra hours is charged as one more day. Fuel, tolls and parking are not included.`);
+      L.push(`This quote is valid until ${fmtEn(hl)}.`);
+      if (c.hotline) L.push(`Contact: ${c.hotline}`);
+      return L.join("\n");
+    }
+
+    L.push(`${c.thuongHieu} gửi ${khachGoi} báo giá thuê xe tự lái (${maHienTai}):`, "");
+    L.push(`🚗 Xe: ${xeTxt}`);
+    L.push(`📅 Nhận xe: ${fmtShort(r.nhan)}`, `📅 Trả xe: ${fmtShort(r.tra)}`);
+    L.push(`⏱ Thời gian: ${fmtDuration(r.ms)} → tính ${r.soNgay} ngày`);
+    if (inp.giaoXe && inp.diaChi) L.push(`📍 Giao xe tại: ${inp.diaChi}`);
+    L.push("");
+    cacDong(r).filter((d) => !d.free).forEach((d, i) => L.push(i === 0
+      ? `• Giá thuê: ${d.c} = ${vndD(d.t)}`
+      : `• ${d.n}${d.c ? ` – ${d.c}` : ""}: ${tienKy(d.t)}`));
+    L.push("", `💰 TỔNG CỘNG: ${vndD(r.tong)}`);
+    if (r.tienCoc > 0) {
+      L.push(`🔒 Đặt cọc giữ xe (${pctTxt(r.cocPct)}): ${vndD(r.tienCoc)} — còn lại ${vndD(r.conLai)} thanh toán khi nhận xe.`);
+      if (c.nganHang) L.push(`Chuyển khoản: ${c.nganHang}`);
+    }
+    if (khacXe.length) L.push("", "Tham khảo loại xe khác cùng lịch:", ...khacXe.map((o) => `• ${o.xe.ten}: ${vndD(o.r.tong)}`));
+    L.push("", `Quá ${c.gioLeNguong} tiếng lẻ tính thêm 1 ngày.${c.ghiChu ? " " + c.ghiChu : ""}`);
+    L.push(`Báo giá có hiệu lực đến ${fmtShort(hl)}.`);
+    if (c.hotline) L.push(`Liên hệ: ${c.hotline}`);
+    return L.join("\n");
+  }
+
+  /* ---------- Render ---------- */
+  let last = null, lastTotal = null, msgSuaTay = false;
+  const nutCanGia = () => [$("copyBtn"), $("barCopy"), $("imgBtn"), $("printBtn"), $("saveBtn")];
+
+  function render() {
+    const inp = layForm(), r = tinhGia(inp);
+    last = { r, inp };
+    const c = cfg, xe = c.xe.find((x) => x.id === inp.loai);
+
+    $("carDesc").textContent = xe ? xe.moTa : "";
+    const rieng = xe && inp.gia > 0 && inp.gia !== xe.gia;
+    $("giaHint").innerHTML = !xe ? "" : rieng
+      ? `Giá riêng cho báo giá này. Giá mặc định ${esc(xe.ten)} là ${vndD(xe.gia)}. <button type="button" class="link-btn" id="giaVeMacDinh">Dùng giá mặc định</button>`
+      : inp.gia > 0 ? `Giá mặc định của xe ${esc(xe.ten)}, tính theo 24 giờ. Sửa số này nếu muốn báo giá khác.`
+      : `Để trống thì dùng giá mặc định ${vndD(xe.gia)}.`;
+    $("quoteCode").textContent = maHienTai;
+    $("weekendLabel").textContent = `Phụ phí cuối tuần +${pctTxt(c.cuoiTuan)}`;
+    $("holidayLabel").textContent = `Phụ phí lễ, Tết +${pctTxt(c.leTet)}`;
+    $("vatLabel").textContent = `Xuất hoá đơn VAT ${pctTxt(c.vat)}`;
+
+    const nhan = parseLocal(inp.nhan), tra = parseLocal(inp.tra);
+    ["fPick", "fRet"].forEach((id) => $(id).classList.remove("invalid"));
+    $("pickHint").className = "hint"; $("retHint").className = "hint";
+    $("pickHint").textContent = nhan ? fmtLong(nhan) : "";
+    $("retHint").textContent = tra ? fmtLong(tra) : "";
+    if (r.loi && r.truong) {
+      $(r.truong === "pick" ? "fPick" : "fRet").classList.add("invalid");
+      const h = r.truong === "pick" ? $("pickHint") : $("retHint");
+      h.className = "error"; h.textContent = r.loi;
+    }
+    const sdtSo = inp.sdt.replace(/\D/g, "");
+    $("zaloBtn").disabled = !!r.loi || sdtSo.length < 9;
+
+    if (r.loi) {
+      $("duration").textContent = "Chọn giờ trả xe sau giờ nhận xe để tính số ngày.";
+      $("days").innerHTML = ""; $("daysLegend").hidden = true;
+      $("quoteSub").textContent = ""; $("quoteBody").innerHTML = `<p class="empty">${esc(r.loi)}</p>`;
+      $("plate").textContent = "—"; $("plate").classList.add("off");
+      $("barTotal").textContent = "—"; $("avgDay").textContent = "";
+      $("pay").hidden = true; $("compare").hidden = true;
+      if (!msgSuaTay) $("msg").value = "";
+      nutCanGia().forEach((b) => (b.disabled = true));
+      $("weekendSub").textContent = `Cộng ${pctTxt(c.cuoiTuan)} giá thuê cho mỗi ngày rơi vào Thứ Bảy hoặc Chủ Nhật.`;
+      $("holidaySub").textContent = `Cộng ${pctTxt(c.leTet)} giá thuê cho mỗi ngày lễ, Tết.`;
+      $("longSub").textContent = moTaBac(c);
+      $("depositSub").textContent = "Khách chuyển cọc để giữ xe, phần còn lại thanh toán khi nhận xe.";
+      return;
+    }
+    nutCanGia().forEach((b) => (b.disabled = false));
+
+    // giải thích số ngày
+    let rule = "";
+    if (r.leThanhNgay && r.ngayTron > 0) rule = `, lẻ ${fmtDuration(r.phutLe * 60000)} (trên ${c.gioLeNguong} tiếng) tính thêm 1 ngày`;
+    else if (r.ngayTron === 0) rule = `, dưới 1 ngày tính tối thiểu 1 ngày`;
+    else if (r.gioLe > 0) rule = c.gioLePct > 0 ? `, lẻ ${fmtDuration(r.phutLe * 60000)} tính phụ phí theo giờ` : `, lẻ ${fmtDuration(r.phutLe * 60000)} (không quá ${c.gioLeNguong} tiếng) không tính thêm`;
+    $("duration").innerHTML = `Thời gian thuê <b>${fmtDuration(r.ms)}</b> → tính <b>${r.soNgay} ngày</b>${rule}.`;
+
+    // dải ngày tính tiền
+    const MAXD = 31;
+    $("days").innerHTML = r.ngay.slice(0, MAXD).map((n) => {
+      const he = n.le && inp.leTet ? c.leTet : n.cuoiTuan && inp.cuoiTuan ? c.cuoiTuan : 0;
+      return `<span class="day ${n.le ? "le" : n.cuoiTuan ? "wk" : ""}" title="${esc(n.le || (n.cuoiTuan ? "Cuối tuần" : "Ngày thường"))}"><b>${THU_NGAN[n.batDau.getDay()]} ${fmtDM(n.batDau)}</b>${giaNgan(Math.round(r.xe.gia * (1 + he / 100)))}</span>`;
+    }).join("") + (r.soNgay > MAXD ? `<span class="day"><b>+${r.soNgay - MAXD}</b>ngày</span>` : "");
+    $("daysLegend").hidden = !(r.soNgayCuoiTuan || r.soNgayLe);
+
+    $("weekendSub").textContent = r.soNgayCuoiTuan ? `${r.soNgayCuoiTuan} ngày thuê rơi vào cuối tuần, cộng ${pctTxt(c.cuoiTuan)} giá ngày.` : "Lịch thuê này không có ngày cuối tuần.";
+    $("holidaySub").textContent = r.soNgayLe ? `${r.soNgayLe} ngày thuê rơi vào ${r.tenLe.join(", ")}, cộng ${pctTxt(c.leTet)} giá ngày.` : "Lịch thuê này không có ngày lễ, Tết.";
+    $("longSub").textContent = r.bac
+      ? `Thuê ${r.soNgay} ngày, đạt mức giảm ${pctTxt(r.bac.pct)} (từ ${r.bac.tu} ngày).` + (r.bacKe ? ` Thêm ${r.bacKe.tu - r.soNgay} ngày nữa được giảm ${pctTxt(r.bacKe.pct)}.` : "")
+      : r.bacKe ? `Chưa đạt. Thuê từ ${r.bacKe.tu} ngày được giảm ${pctTxt(r.bacKe.pct)}.` : "Chưa cài mức ưu đãi nào.";
+    $("depositSub").textContent = inp.coc ? `Cọc ${vndD(r.tienCoc)}, còn lại ${vndD(r.conLai)} khi nhận xe.` : "Khách chuyển cọc để giữ xe, phần còn lại thanh toán khi nhận xe.";
+
+    // bảng
+    const D = cacDong(r);
+    $("quoteBody").innerHTML = `<table><caption>Chi tiết báo giá</caption><tbody>${D.map((d) =>
+      `<tr class="${d.free ? "free" : d.t < 0 ? "minus" : ""}"><td>${esc(d.n)}${d.c ? `<span class="d">${esc(d.c)}</span>` : ""}</td><td>${tienKy(d.t)}</td></tr>`).join("")}</tbody></table>`;
+    const khachTxt = inp.tenKhach ? `${goiKhach(inp)}${inp.sdt ? " · " + inp.sdt : ""} · ` : "";
+    $("quoteSub").textContent = `${khachTxt}${fmtShort(r.nhan)} → ${fmtShort(r.tra)}`;
+    $("printInfo").textContent = `Xe: ${r.xe.ten}${inp.dongXe ? " – " + inp.dongXe : ""}${r.soXe > 1 ? ` × ${r.soXe} xe` : ""}\nThời gian: ${fmtDuration(r.ms)} → tính ${r.soNgay} ngày` + (inp.giaoXe && inp.diaChi ? `\nGiao xe tại: ${inp.diaChi}` : "");
+    $("printNote").textContent = `Quá ${c.gioLeNguong} tiếng lẻ tính thêm 1 ngày. ${c.ghiChu}\nBáo giá có hiệu lực đến ${fmtShort(hieuLucDen())}.` + (c.hotline ? `\nLiên hệ: ${c.hotline}` : "");
+
+    $("plate").classList.remove("off");
+    $("plate").innerHTML = `${vnd(r.tong)}<span class="cur">đ</span>`;
+    $("barTotal").textContent = vndD(r.tong);
+    $("avgDay").textContent = r.soNgay > 1 || r.soXe > 1 ? `≈ ${vndD(r.tong / r.soNgay / r.soXe)} / ngày / xe` : "";
+    if (lastTotal !== null && lastTotal !== r.tong) { $("plate").classList.remove("bump"); void $("plate").offsetWidth; $("plate").classList.add("bump"); }
+    lastTotal = r.tong;
+    $("pay").hidden = !inp.coc;
+    $("payCoc").textContent = vndD(r.tienCoc); $("payConLai").textContent = vndD(r.conLai);
+
+    // so sánh loại xe
+    const ss = soSanhXe(inp);
+    $("compare").hidden = ss.length < 2;
+    $("cmpList").innerHTML = ss.map((o) => {
+      const diff = o.r.tong - r.tong;
+      return `<button type="button" class="cmp ${o.xe.id === r.xe.id ? "cur" : ""}" data-loai="${esc(o.xe.id)}">${esc(o.xe.ten)}<b>${vndD(o.r.tong)}</b>` +
+        (o.xe.id === r.xe.id ? `<span class="diff">đang chọn</span>` : `<span class="diff">${diff >= 0 ? "+" : "−"}${vndD(Math.abs(diff))}</span>`) + `</button>`;
+    }).join("");
+
+    if (!msgSuaTay) $("msg").value = buildMessage(r, inp);
+    $("editedNote").hidden = !msgSuaTay;
+  }
+  function moTaBac(c) {
+    return c.giamDai.length ? c.giamDai.map((b) => `từ ${b.tu} ngày giảm ${pctTxt(b.pct)}`).join(", ").replace(/^t/, "T") + "." : "Chưa cài mức ưu đãi nào.";
+  }
+
+  /* ---------- Toast & copy ---------- */
+  let toastTimer;
+  function toast(text) {
+    const t = $("toast"); t.textContent = text; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+  }
+  function fallbackCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:-1000px;opacity:0";
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    let ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta); return ok;
+  }
+  async function copyText(text) {
+    let ok = false;
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; } } catch (e) { ok = false; }
+    return ok || fallbackCopy(text);
+  }
+  async function copyQuote() {
+    if (!last || last.r.loi) return false;
+    const ok = await copyText($("msg").value);
+    const btn = $("copyBtn");
+    if (ok) {
+      luuLichSu("da-gui", true);
+      btn.classList.add("done"); btn.querySelector("span").textContent = "Đã copy báo giá";
+      toast("Đã copy và lưu vào lịch sử. Dán vào Zalo để gửi khách.");
+      setTimeout(() => { btn.classList.remove("done"); btn.querySelector("span").textContent = "Copy báo giá"; }, 2000);
+    } else {
+      $("msg").focus(); $("msg").select();
+      toast("Trình duyệt chặn copy. Tin nhắn đã được bôi đen, bấm ⌘C / Ctrl+C để copy.");
+    }
+    return ok;
+  }
+
+  /* ---------- Lịch sử ---------- */
+  const TRANG_THAI = { "nhap": "Nháp", "da-gui": "Đã gửi", "chot": "Đã chốt", "huy": "Huỷ" };
+  function ghiLichSu() { const ok = kho.ghi(KHOA.lichSu, lichSu); $("hCount").textContent = lichSu.length; return ok; }
+  function luuLichSu(trangThai, imLang) {
+    if (!last || last.r.loi) return;
+    const { r, inp } = last;
+    const cu = lichSu.find((h) => h.ma === maHienTai);
+    const muc = { ma: maHienTai, luc: Date.now(), inp: clone(inp), tong: r.tong, tenXe: r.xe.ten, soNgay: r.soNgay,
+                  trangThai: cu && cu.trangThai !== "nhap" && trangThai !== "chot" ? cu.trangThai : trangThai };
+    if (cu) Object.assign(cu, muc); else lichSu.unshift(muc);
+    if (lichSu.length > 300) lichSu.length = 300;
+    chotMa();
+    const ok = ghiLichSu();
+    if (!imLang) toast(ok ? `Đã lưu báo giá ${maHienTai}` : "Trình duyệt không cho lưu trên máy này");
+  }
+  function veLichSu() {
+    const q = $("hSearch").value.trim().toLowerCase();
+    const chot = lichSu.filter((h) => h.trangThai === "chot");
+    $("hStats").innerHTML =
+      `<div>Báo giá<b>${lichSu.length}</b></div><div>Đã chốt<b>${chot.length}${lichSu.length ? ` <small style="font-size:13px;color:var(--muted)">(${Math.round(chot.length / lichSu.length * 100)}%)</small>` : ""}</b></div>` +
+      `<div>Doanh thu chốt<b>${giaNgan(chot.reduce((s, h) => s + h.tong, 0))}</b></div>`;
+    const ds = lichSu.filter((h) => !q || [h.ma, h.inp.tenKhach, h.inp.sdt, h.tenXe].join(" ").toLowerCase().includes(q));
+    $("hList").innerHTML = ds.length ? ds.map((h) => {
+      const n = parseLocal(h.inp.nhan), t = parseLocal(h.inp.tra), l = new Date(h.luc);
+      return `<div class="h-item ${esc(h.trangThai)}" data-ma="${esc(h.ma)}">
+        <div class="who">${esc(h.inp.tenKhach || "Khách chưa có tên")}${h.inp.sdt ? ` · ${esc(h.inp.sdt)}` : ""}</div>
+        <div class="sum">${vndD(h.tong)}</div>
+        <div class="meta">${esc(h.ma)} · ${esc(h.tenXe)}${h.inp.soXe > 1 ? ` × ${h.inp.soXe}` : ""} · ${n ? fmtShort(n) : ""} → ${t ? fmtShort(t) : ""} (${h.soNgay} ngày) · lưu ${fmtTime(l)} ${fmtDM(l)}</div>
+        <div class="ctl">
+          <select data-act="tt" aria-label="Trạng thái báo giá ${esc(h.ma)}">${Object.entries(TRANG_THAI).map(([k, v]) => `<option value="${k}" ${k === h.trangThai ? "selected" : ""}>${v}</option>`).join("")}</select>
+          <button type="button" data-act="mo">Mở lại</button>
+          <button type="button" data-act="nhan">Nhân bản</button>
+          <button type="button" data-act="xoa">Xoá</button>
+        </div></div>`;
+    }).join("") : `<p class="empty">${lichSu.length ? "Không tìm thấy báo giá nào khớp." : "Chưa có báo giá nào được lưu."}</p>`;
+  }
+  $("hList").addEventListener("change", (e) => {
+    if (e.target.dataset.act !== "tt") return;
+    const h = lichSu.find((x) => x.ma === e.target.closest(".h-item").dataset.ma);
+    if (h) { h.trangThai = e.target.value; ghiLichSu(); veLichSu(); }
+  });
+  $("hList").addEventListener("click", (e) => {
+    const act = e.target.dataset.act; if (!act || act === "tt") return;
+    const ma = e.target.closest(".h-item").dataset.ma, h = lichSu.find((x) => x.ma === ma); if (!h) return;
+    if (act === "xoa") { if (confirm(`Xoá báo giá ${ma}?`)) { lichSu = lichSu.filter((x) => x.ma !== ma); ghiLichSu(); veLichSu(); } return; }
+    datForm(h.inp); msgSuaTay = false;
+    if (act === "mo") maHienTai = h.ma; else ganMaMoi();
+    $("historyDlg").close(); render();
+    toast(act === "mo" ? `Đã mở lại ${ma}` : `Đã nhân bản thành ${maHienTai}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  $("hSearch").addEventListener("input", veLichSu);
+  $("hClear").addEventListener("click", () => {
+    if (!lichSu.length || !confirm(`Xoá toàn bộ ${lichSu.length} báo giá đã lưu? Không khôi phục được.`)) return;
+    lichSu = []; ghiLichSu(); veLichSu();
+  });
+
+  /* ---------- Ảnh báo giá (canvas) ---------- */
+  function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function wrap(ctx, text, maxW) {
+    const out = [];
+    String(text).split("\n").forEach((para) => {
+      let line = "";
+      para.split(/\s+/).forEach((w) => {
+        const thu = line ? line + " " + w : w;
+        if (ctx.measureText(thu).width > maxW && line) { out.push(line); line = w; } else line = thu;
+      });
+      out.push(line);
+    });
+    return out;
+  }
+  function veAnh(r, inp, ctx, W) {
+    const c = cfg, P = 64, F = "'Be Vietnam Pro', system-ui, sans-serif", FN = "'Barlow Condensed', 'Be Vietnam Pro', sans-serif";
+    const css = getComputedStyle(document.documentElement), col = (v) => css.getPropertyValue(v).trim();
+    const ink = col("--ink"), muted = col("--muted"), plate = col("--plate"), line = col("--line"), asphalt = col("--asphalt");
+    let y = 0;
+    const text = (s, x, yy, font, color, align) => { ctx.font = font; ctx.fillStyle = color; ctx.textAlign = align || "left"; ctx.fillText(s, x, yy); };
+
+    // header
+    ctx.fillStyle = asphalt; ctx.fillRect(0, 0, W, 200);
+    ctx.font = `700 54px ${FN}`; const bw = ctx.measureText(c.thuongHieu).width + 44;
+    ctx.fillStyle = plate; rr(ctx, P, 48, bw, 76, 8); ctx.fill();
+    ctx.strokeStyle = ink; ctx.lineWidth = 4; rr(ctx, P + 6, 54, bw - 12, 64, 5); ctx.stroke();
+    text(c.thuongHieu, P + bw / 2, 106, `700 54px ${FN}`, ink, "center");
+    text("BÁO GIÁ THUÊ XE TỰ LÁI", P + bw + 28, 84, `700 34px ${F}`, "#fff");
+    text(`${maHienTai} · ${fmtDate(new Date())}`, P + bw + 28, 122, `500 24px ${F}`, "#C3CDD2");
+    ctx.fillStyle = plate; for (let x = 0; x < W; x += 104) ctx.fillRect(x, 172, 56, 7);
+    y = 200 + 56;
+
+    // thông tin
+    const info = [];
+    if (inp.tenKhach) info.push(["Khách hàng", goiKhach(inp).replace(/^./, (m) => m.toUpperCase()) + (inp.sdt ? ` · ${inp.sdt}` : "")]);
+    info.push(["Xe", `${r.xe.ten}${inp.dongXe ? " – " + inp.dongXe : r.xe.moTa ? ` (${r.xe.moTa})` : ""}${r.soXe > 1 ? ` × ${r.soXe} xe` : ""}`]);
+    info.push(["Nhận xe", fmtShort(r.nhan)], ["Trả xe", fmtShort(r.tra)], ["Thời gian", `${fmtDuration(r.ms)} → tính ${r.soNgay} ngày`]);
+    if (inp.giaoXe && inp.diaChi) info.push(["Giao xe tại", inp.diaChi]);
+    info.forEach(([k, v]) => {
+      text(k, P, y, `500 26px ${F}`, muted);
+      ctx.font = `600 28px ${F}`;
+      wrap(ctx, v, W - P * 2 - 220).forEach((ln, i) => { if (i) y += 38; text(ln, P + 220, y, `600 28px ${F}`, ink); });
+      y += 46;
+    });
+    y += 6; ctx.fillStyle = ink; ctx.fillRect(P, y, W - P * 2, 3); y += 54;
+
+    // các dòng
+    cacDong(r).forEach((d) => {
+      ctx.font = `600 29px ${F}`;
+      const tw = ctx.measureText(tienKy(d.t)).width;
+      const ls = wrap(ctx, d.n, W - P * 2 - tw - 30);
+      ls.forEach((ln, i) => { text(ln, P, y + i * 38, `600 29px ${F}`, ink); });
+      text(tienKy(d.t), W - P, y, `600 29px ${F}`, d.t < 0 ? col("--ok") : d.free ? muted : ink, "right");
+      y += (ls.length - 1) * 38;
+      if (d.c) { ctx.font = `400 23px ${F}`; wrap(ctx, d.c, W - P * 2 - 200).forEach((ln) => { y += 34; text(ln, P, y, `400 23px ${F}`, muted); }); }
+      y += 26; ctx.strokeStyle = line; ctx.lineWidth = 2; ctx.setLineDash([8, 8]); ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - P, y); ctx.stroke(); ctx.setLineDash([]);
+      y += 50;
+    });
+
+    // tổng
+    text("TỔNG CỘNG", P, y, `700 26px ${F}`, muted); y += 22;
+    ctx.fillStyle = plate; rr(ctx, P, y, W - P * 2, 170, 14); ctx.fill();
+    ctx.strokeStyle = ink; ctx.lineWidth = 6; rr(ctx, P + 3, y + 3, W - P * 2 - 6, 164, 12); ctx.stroke();
+    ctx.lineWidth = 2.5; rr(ctx, P + 13, y + 13, W - P * 2 - 26, 144, 7); ctx.stroke();
+    text(vndD(r.tong), W / 2, y + 124, `700 118px ${FN}`, ink, "center");
+    y += 170 + 52;
+
+    if (r.tienCoc > 0) {
+      text(`Đặt cọc giữ xe (${pctTxt(r.cocPct)})`, P, y, `500 27px ${F}`, muted); text(vndD(r.tienCoc), W - P, y, `700 29px ${F}`, ink, "right"); y += 44;
+      text("Còn lại khi nhận xe", P, y, `500 27px ${F}`, muted); text(vndD(r.conLai), W - P, y, `700 29px ${F}`, ink, "right"); y += 44;
+      if (c.nganHang) { ctx.font = `500 24px ${F}`; wrap(ctx, `Chuyển khoản: ${c.nganHang}`, W - P * 2).forEach((ln) => { text(ln, P, y, `500 24px ${F}`, ink); y += 34; }); }
+      y += 16;
+    }
+
+    // ghi chú
+    ctx.font = `400 23px ${F}`;
+    const note = `Quá ${c.gioLeNguong} tiếng lẻ tính thêm 1 ngày. ${c.ghiChu}\nBáo giá có hiệu lực đến ${fmtShort(hieuLucDen())}.` + (c.hotline ? `\nLiên hệ: ${c.hotline}` : "");
+    wrap(ctx, note, W - P * 2).forEach((ln) => { text(ln, P, y, `400 23px ${F}`, muted); y += 34; });
+    return y + 30;
+  }
+  let anhBlob = null;
+  async function xuatAnh() {
+    if (!last || last.r.loi) return;
+    try { await Promise.all([document.fonts.load("700 54px 'Barlow Condensed'"), document.fonts.load("600 28px 'Be Vietnam Pro'"), document.fonts.load("400 23px 'Be Vietnam Pro'")]); } catch (e) {}
+    const W = 1080, do_ = document.createElement("canvas"); do_.width = W; do_.height = 10;
+    const H = Math.ceil(veAnh(last.r, last.inp, do_.getContext("2d"), W));
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+    veAnh(last.r, last.inp, ctx, W);
+    anhBlob = await new Promise((res) => cv.toBlob(res, "image/png"));
+    $("imgPreview").src = cv.toDataURL("image/png");
+    const f = anhBlob && new File([anhBlob], `${maHienTai}.png`, { type: "image/png" });
+    $("imgShare").hidden = !(f && navigator.canShare && navigator.canShare({ files: [f] }));
+    moDlg($("imgDlg"));
+  }
+  $("imgDownload").addEventListener("click", () => {
+    if (!anhBlob) return;
+    const a = document.createElement("a"); a.href = URL.createObjectURL(anhBlob); a.download = `${maHienTai}.png`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    luuLichSu("da-gui", true); toast(`Đã tải ảnh ${maHienTai}.png`);
+  });
+  $("imgCopy").addEventListener("click", async () => {
+    if (!anhBlob) return;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": anhBlob })]);
+      luuLichSu("da-gui", true); toast("Đã copy ảnh. Dán vào khung chat Zalo để gửi khách.");
+    } catch (e) { toast("Trình duyệt không cho copy ảnh. Hãy bấm Tải về."); }
+  });
+  $("imgShare").addEventListener("click", async () => {
+    try { await navigator.share({ files: [new File([anhBlob], `${maHienTai}.png`, { type: "image/png" })], title: `Báo giá ${maHienTai}` }); luuLichSu("da-gui", true); } catch (e) {}
+  });
+
+  /* ---------- Dialog chung ---------- */
+  function moDlg(d) { if (typeof d.showModal === "function") d.showModal(); else d.setAttribute("open", ""); }
+  document.querySelectorAll("dialog").forEach((d) => {
+    d.addEventListener("click", (e) => { if (e.target === d || e.target.closest("[data-close]")) d.close(); });
+  });
+
+  /* ---------- Cài đặt ---------- */
+  const rowXe = (x) => `<div class="srow xe" data-id="${esc(x.id)}">
+    <input type="text" data-f="ten" value="${esc(x.ten)}" placeholder="Tên (VD: 16 chỗ)" aria-label="Tên loại xe">
+    <input type="text" data-f="moTa" value="${esc(x.moTa)}" placeholder="Mô tả" aria-label="Mô tả">
+    <input type="number" data-f="cho" value="${x.cho}" min="1" max="50" aria-label="Số chỗ">
+    <input type="text" data-f="gia" class="money-in w2" value="${x.gia ? vnd(x.gia) : ""}" inputmode="numeric" placeholder="Giá / ngày" aria-label="Giá mỗi ngày">
+    <button type="button" class="icon-btn" data-rm aria-label="Xoá loại xe">×</button></div>`;
+  const rowBac = (b) => `<div class="srow bac"><span>Từ</span><input type="number" data-f="tu" value="${b.tu || ""}" min="1" aria-label="Số ngày"><span>ngày, giảm</span>
+    <input type="number" data-f="pct" value="${b.pct || ""}" min="0" max="100" step="0.5" aria-label="Phần trăm giảm"><span>%</span>
+    <button type="button" class="icon-btn" data-rm aria-label="Xoá mức">×</button></div>`;
+  const rowLe = (l) => `<div class="srow le"><input type="text" class="w2" data-f="ten" value="${esc(l.ten)}" placeholder="Tên (VD: Tết Âm lịch 2028)" aria-label="Tên đợt lễ">
+    <input type="date" data-f="tu" value="${esc(l.tu)}" aria-label="Từ ngày"><input type="date" data-f="den" value="${esc(l.den)}" aria-label="Đến ngày">
+    <button type="button" class="icon-btn" data-rm aria-label="Xoá đợt lễ">×</button></div>`;
+  function napCaiDat(c) {
+    $("sXe").innerHTML = c.xe.map(rowXe).join("");
+    $("sBac").innerHTML = c.giamDai.map(rowBac).join("");
+    $("sLeRieng").innerHTML = c.leRieng.map(rowLe).join("");
+    $("sLeFixed").textContent = "Tự áp dụng hằng năm: " + c.leHangNam.map((l) => l.ten).join(", ") + ". Tết Âm lịch và Giỗ Tổ đổi ngày mỗi năm, hãy nhập bên dưới.";
+    $("sCuoiTuan").value = c.cuoiTuan; $("sLe").value = c.leTet; $("sNguong").value = c.gioLeNguong; $("sGioLePct").value = c.gioLePct;
+    $("sPhiGiao").value = vnd(c.phiGiaoXe); $("sVat").value = c.vat; $("sCoc").value = c.coc; $("sHieuLuc").value = c.hieuLucGio;
+    $("sThuongHieu").value = c.thuongHieu; $("sHotline").value = c.hotline; $("sGhiChu").value = c.ghiChu; $("sNganHang").value = c.nganHang;
+    $("sErr").hidden = true;
+  }
+  function docCaiDat() {
+    const f = (row, k) => row.querySelector(`[data-f="${k}"]`);
+    const xe = []; let loi = null;
+    $("sXe").querySelectorAll(".srow").forEach((row) => {
+      const ten = f(row, "ten").value.trim(), gia = digitsOnly(f(row, "gia").value);
+      if (!ten && !gia) return;
+      if (!ten) { f(row, "ten").setAttribute("aria-invalid", "true"); loi = loi || f(row, "ten"); }
+      if (gia < 1000) { f(row, "gia").setAttribute("aria-invalid", "true"); loi = loi || f(row, "gia"); }
+      xe.push({ id: row.dataset.id, ten, moTa: f(row, "moTa").value.trim(), cho: parseInt(f(row, "cho").value, 10) || 4, gia });
+    });
+    if (loi) return { loi, msg: "Mỗi loại xe cần có tên và giá từ 1.000đ trở lên." };
+    if (!xe.length) return { loi: $("sAddXe"), msg: "Cần ít nhất một loại xe." };
+    const giamDai = [...$("sBac").querySelectorAll(".srow")].map((row) => ({ tu: parseInt(f(row, "tu").value, 10) || 0, pct: num(f(row, "pct").value) }));
+    const leRieng = [...$("sLeRieng").querySelectorAll(".srow")].map((row) => ({ ten: f(row, "ten").value.trim() || "Lễ", tu: f(row, "tu").value, den: f(row, "den").value }));
+    return { c: chuanCaiDat({
+      ...cfg, xe, giamDai, leRieng,
+      cuoiTuan: $("sCuoiTuan").value, leTet: $("sLe").value, gioLeNguong: $("sNguong").value, gioLePct: $("sGioLePct").value,
+      phiGiaoXe: digitsOnly($("sPhiGiao").value), vat: $("sVat").value, coc: $("sCoc").value || MAC_DINH.coc, hieuLucGio: $("sHieuLuc").value || MAC_DINH.hieuLucGio,
+      thuongHieu: $("sThuongHieu").value.trim() || MAC_DINH.thuongHieu, hotline: $("sHotline").value.trim(),
+      ghiChu: $("sGhiChu").value.trim(), nganHang: $("sNganHang").value.trim(),
+    }) };
+  }
+  function apDungCaiDat(c, thongBao) {
+    const phiCu = cfg.phiGiaoXe, cocCu = cfg.coc, giaCu = giaMacDinh(), theoMacDinh = digitsOnly($("giaNgay").value) === giaCu;
+    cfg = c;
+    const ok = kho.ghi(KHOA.caiDat, cfg);
+    $("brand").textContent = cfg.thuongHieu;
+    if (digitsOnly($("deliveryAmount").value) === phiCu) $("deliveryAmount").value = vnd(cfg.phiGiaoXe);
+    if (num($("depositPct").value) === cocCu) $("depositPct").value = cfg.coc;
+    buildCars(); if (theoMacDinh || !giaMacDinh()) datGiaMacDinh(); render();
+    toast(ok ? thongBao : "Đã áp dụng, nhưng trình duyệt không cho lưu lại lần sau");
+  }
+  $("btnSettings").addEventListener("click", () => { napCaiDat(cfg); moDlg($("settingsDlg")); });
+  $("sAddXe").addEventListener("click", () => { $("sXe").insertAdjacentHTML("beforeend", rowXe({ id: "x" + Date.now(), ten: "", moTa: "", cho: 4, gia: 0 })); $("sXe").lastElementChild.querySelector("input").focus(); });
+  $("sAddBac").addEventListener("click", () => { $("sBac").insertAdjacentHTML("beforeend", rowBac({})); $("sBac").lastElementChild.querySelector("input").focus(); });
+  $("sAddLe").addEventListener("click", () => { $("sLeRieng").insertAdjacentHTML("beforeend", rowLe({ ten: "", tu: "", den: "" })); $("sLeRieng").lastElementChild.querySelector("input").focus(); });
+  $("settingsForm").addEventListener("click", (e) => { if (e.target.matches("[data-rm]")) e.target.closest(".srow").remove(); });
+  $("settingsForm").addEventListener("input", (e) => e.target.removeAttribute("aria-invalid"));
+  $("sReset").addEventListener("click", () => { napCaiDat(chuanCaiDat(null)); toast("Đã điền lại giá trị mặc định. Bấm Lưu cài đặt để áp dụng."); });
+  $("settingsForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const kq = docCaiDat();
+    if (kq.loi) { $("sErr").textContent = kq.msg; $("sErr").hidden = false; kq.loi.focus(); return; }
+    $("settingsDlg").close(); apDungCaiDat(kq.c, "Đã lưu cài đặt");
+  });
+  $("sExport").addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" }));
+    a.download = "hixe-bao-gia-cai-dat.json"; document.body.appendChild(a); a.click(); a.remove();
+  });
+  $("sImport").addEventListener("click", () => $("sFile").click());
+  $("sFile").addEventListener("change", async (e) => {
+    const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+    try {
+      const raw = JSON.parse(await file.text());
+      if (!raw || !Array.isArray(raw.xe)) throw new Error("sai định dạng");
+      napCaiDat(chuanCaiDat(raw)); toast("Đã đọc file. Kiểm tra lại rồi bấm Lưu cài đặt.");
+    } catch (err) { $("sErr").textContent = "File không đúng định dạng cài đặt của công cụ này."; $("sErr").hidden = false; }
+  });
+
+  /* ---------- Sửa giá xe nhanh ---------- */
+  function giaGoc(id) { const x = MAC_DINH.xe.find((v) => v.id === id); return x ? x.gia : 0; }
+  function napGia(lay) {
+    $("priceFields").innerHTML = cfg.xe.map((v, i) => {
+      const goc = giaGoc(v.id);
+      return `<div class="price-row">
+        <label for="gia${i}">${esc(v.ten)}<span>${esc(v.moTa)}</span></label>
+        <div class="money"><input type="text" id="gia${i}" data-id="${esc(v.id)}" inputmode="numeric" autocomplete="off" value="${vnd(lay(v))}"><span class="unit">đ/ngày</span></div>
+        ${goc ? `<p class="was">Giá gốc ${vndD(goc)}</p>` : ""}
+      </div>`;
+    }).join("");
+    $("priceErr").hidden = true;
+  }
+  $("editPrices").addEventListener("click", () => {
+    napGia((v) => v.gia); moDlg($("priceDlg"));
+    const first = $("priceFields").querySelector("input");
+    if (first) { first.focus(); first.select(); }
+  });
+  $("priceFields").addEventListener("focusout", (e) => { if (e.target.matches("input")) { const n = digitsOnly(e.target.value); e.target.value = n ? vnd(n) : ""; } });
+  $("priceFields").addEventListener("input", (e) => e.target.removeAttribute("aria-invalid"));
+  $("priceReset").addEventListener("click", () => napGia((v) => giaGoc(v.id) || v.gia));
+  $("priceForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const moi = clone(cfg); let loi = null;
+    $("priceFields").querySelectorAll("input").forEach((inp) => {
+      const n = digitsOnly(inp.value);
+      if (n < 1000) { inp.setAttribute("aria-invalid", "true"); loi = loi || inp; }
+      const x = moi.xe.find((v) => v.id === inp.dataset.id); if (x) x.gia = n;
+    });
+    if (loi) { $("priceErr").textContent = "Nhập giá từ 1.000đ trở lên cho mọi loại xe."; $("priceErr").hidden = false; loi.focus(); return; }
+    $("priceDlg").close(); apDungCaiDat(moi, "Đã lưu giá xe");
+  });
+
+  /* ---------- Sự kiện ---------- */
+  $("form").addEventListener("input", render);
+  $("form").addEventListener("change", (e) => { if (e.target.name === "loai") datGiaMacDinh(); dongBoAnHien(); render(); });
+  $("giaNgay").addEventListener("blur", (e) => { const n = digitsOnly(e.target.value); e.target.value = vnd(n >= 1000 ? n : giaMacDinh()); render(); });
+  $("giaHint").addEventListener("click", (e) => { if (e.target.id === "giaVeMacDinh") { datGiaMacDinh(); render(); } });
+  document.addEventListener("focusout", (e) => {
+    if (e.target.classList && e.target.classList.contains("money-in")) { const n = digitsOnly(e.target.value); e.target.value = n ? vnd(n) : e.target.id === "deliveryAmount" ? "0" : ""; }
+    if (e.target.id === "discValue" && radio("discKind") === "vnd") { const n = digitsOnly(e.target.value); e.target.value = n ? vnd(n) : ""; }
+  });
+  $("pick").addEventListener("change", () => {
+    // giờ trả đang trước hoặc bằng giờ nhận mới → tự đẩy giờ trả = nhận + 1 ngày
+    const p = parseLocal($("pick").value), r = parseLocal($("ret").value);
+    if (p && r && r <= p) { $("ret").value = toLocalInput(new Date(p.getTime() + MS_D)); render(); }
+  });
+  document.querySelectorAll(".chip").forEach((ch) => ch.addEventListener("click", () => {
+    const p = parseLocal($("pick").value);
+    if (!p) { $("pick").focus(); return; }
+    $("ret").value = toLocalInput(new Date(p.getFullYear(), p.getMonth(), p.getDate() + (+ch.dataset.days), p.getHours(), p.getMinutes()));
+    render();
+  }));
+  $("cmpList").addEventListener("click", (e) => {
+    const b = e.target.closest(".cmp"); if (!b) return;
+    datRadio("loai", b.dataset.loai); datGiaMacDinh(); render();
+  });
+  document.querySelectorAll('input[name="kieuTin"]').forEach((el) => el.addEventListener("change", () => { msgSuaTay = false; render(); }));
+  $("kemSoSanh").addEventListener("change", () => { msgSuaTay = false; render(); });
+  $("msg").addEventListener("input", () => { msgSuaTay = true; $("editedNote").hidden = false; });
+  $("resetMsg").addEventListener("click", () => { msgSuaTay = false; render(); });
+
+  $("copyBtn").addEventListener("click", copyQuote);
+  $("barCopy").addEventListener("click", copyQuote);
+  $("saveBtn").addEventListener("click", () => luuLichSu("nhap"));
+  $("printBtn").addEventListener("click", () => window.print());
+  $("imgBtn").addEventListener("click", xuatAnh);
+  $("zaloBtn").addEventListener("click", async () => {
+    let so = $("sdt").value.replace(/\D/g, "");
+    if (so.startsWith("84")) so = "0" + so.slice(2);
+    const w = window.open(`https://zalo.me/${so}`, "_blank", "noopener");
+    const ok = await copyText($("msg").value);
+    if (ok) luuLichSu("da-gui", true);
+    toast(ok ? "Đã copy tin nhắn. Dán vào khung chat Zalo vừa mở." : "Đã mở Zalo. Hãy copy tin nhắn bằng tay.");
+    if (!w) toast("Trình duyệt chặn mở tab mới. Hãy cho phép cửa sổ bật lên.");
+  });
+  $("btnHistory").addEventListener("click", () => { $("hSearch").value = ""; veLichSu(); moDlg($("historyDlg")); });
+  $("btnNew").addEventListener("click", () => {
+    datForm(formMoi()); msgSuaTay = false; ganMaMoi(); render();
+    $("tenKhach").focus(); toast(`Báo giá mới ${maHienTai}`);
+  });
+
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(([e]) => $("bar").classList.toggle("hide", e.isIntersecting), { threshold: 0.2 }).observe($("quote"));
+  }
+  // Nút cài app: chỉ hiện khi trình duyệt cho phép cài (Chrome, Edge, Android)
+  let loiMoiCai = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); loiMoiCai = e; $("btnInstall").hidden = false; });
+  window.addEventListener("appinstalled", () => { loiMoiCai = null; $("btnInstall").hidden = true; toast("Đã cài app Báo giá Hixe"); });
+  $("btnInstall").addEventListener("click", async () => {
+    if (!loiMoiCai) return;
+    loiMoiCai.prompt(); await loiMoiCai.userChoice.catch(() => {});
+    loiMoiCai = null; $("btnInstall").hidden = true;
+  });
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
+
+  /* ---------- Khởi động ---------- */
+  $("brand").textContent = cfg.thuongHieu;
+  $("hCount").textContent = lichSu.length;
+  buildCars();
+  datForm(formMoi());
+  ganMaMoi();
+  render();
+})();
+</script>
+</body>
+</html>
